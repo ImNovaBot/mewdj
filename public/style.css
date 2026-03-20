@@ -1712,3 +1712,153 @@ body {
         font-size: 0.8rem;
     }
 }
+
+/* MEW's DJ Intelligence Display */
+.mew-intelligence {
+    margin-top: 10px;
+    padding: 8px;
+    background: rgba(168, 85, 247, 0.1);
+    border-radius: 8px;
+    border: 1px solid rgba(168, 85, 247, 0.3);
+}
+
+.mew-timing {
+    margin-bottom: 5px;
+}
+
+.smart-timing-badge {
+    background: linear-gradient(45deg, #8b5cf6, #a855f7);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: bold;
+    display: inline-block;
+    margin-bottom: 3px;
+}
+
+.timing-details {
+    font-size: 0.7rem;
+    color: #a1a1aa;
+    margin-left: 5px;
+}
+
+.hot-cues {
+    display: flex;
+    gap: 5px;
+    margin: 5px 0;
+    flex-wrap: wrap;
+}
+
+.cue-badge {
+    background: rgba(34, 197, 94, 0.8);
+    color: white;
+    padding: 2px 6px;
+    border-radius: 8px;
+    font-size: 0.7rem;
+    font-weight: bold;
+}
+
+.mew-recommendation {
+    font-size: 0.75rem;
+    color: #c084fc;
+    font-style: italic;
+    margin-top: 5px;
+    padding: 3px 0;
+    border-top: 1px solid rgba(168, 85, 247, 0.2);
+}
+
+/* Enhanced Now Playing with Structure */
+.now-playing .track-structure {
+    margin-top: 10px;
+    padding: 10px;
+    background: rgba(168, 85, 247, 0.1);
+    border-radius: 8px;
+}
+
+.structure-timeline {
+    height: 6px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+    position: relative;
+    margin: 8px 0;
+}
+
+.structure-section {
+    position: absolute;
+    height: 100%;
+    border-radius: 3px;
+    opacity: 0.8;
+}
+
+.structure-section.intro { background: #3b82f6; }
+.structure-section.verse { background: #10b981; }
+.structure-section.chorus { background: #f59e0b; }
+.structure-section.bridge { background: #ef4444; }
+.structure-section.outro { background: #6b7280; }
+
+.structure-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.7rem;
+    color: #a1a1aa;
+    margin-top: 5px;
+}
+
+.mew-decision {
+    background: linear-gradient(45deg, rgba(168, 85, 247, 0.2), rgba(139, 92, 246, 0.2));
+    border: 1px solid rgba(168, 85, 247, 0.4);
+    border-radius: 8px;
+    padding: 8px;
+    margin: 8px 0;
+    animation: mew-glow 3s ease-in-out infinite;
+}
+
+@keyframes mew-glow {
+    0%, 100% { 
+        box-shadow: 0 0 5px rgba(168, 85, 247, 0.3);
+    }
+    50% { 
+        box-shadow: 0 0 15px rgba(168, 85, 247, 0.6);
+    }
+}
+
+.mew-decision-title {
+    font-weight: bold;
+    color: #a855f7;
+    margin-bottom: 4px;
+}
+
+.mew-decision-detail {
+    font-size: 0.8rem;
+    color: #c084fc;
+}
+
+/* Transition Strategy Display */
+.transition-strategy {
+    background: rgba(34, 197, 94, 0.1);
+    border: 1px solid rgba(34, 197, 94, 0.3);
+    border-radius: 8px;
+    padding: 8px;
+    margin: 8px 0;
+}
+
+.strategy-title {
+    font-weight: bold;
+    color: #22c55e;
+    margin-bottom: 4px;
+}
+
+.strategy-effects {
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+}
+
+.strategy-effect {
+    background: rgba(34, 197, 94, 0.8);
+    color: white;
+    padding: 2px 6px;
+    border-radius: 8px;
+    font-size: 0.7rem;
+}

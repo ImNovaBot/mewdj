@@ -244,6 +244,12 @@ class DJMEWv2 {
                 this.updateNowPlaying();
                 break;
                 
+            case 'smart-transition-ready':
+                console.log('🔮 MEW detected perfect transition point!');
+                this.showNotification('🔮 MEW: Perfect transition point detected!');
+                // Could auto-advance to next track here
+                break;
+                
             case 'error':
                 this.showNotification(message.message, 'error');
                 break;
@@ -497,6 +503,31 @@ class DJMEWv2 {
                             <span class="energy-badge">⚡ ${track.energy}%</span>
                         </div>
                     </div>
+                    
+                    ${track.structure ? `
+                        <div class="mew-intelligence">
+                            <div class="mew-timing">
+                                <div class="smart-timing-badge">
+                                    🧠 MEW: ${Math.round(track.play_duration)}s
+                                </div>
+                                <div class="timing-details">
+                                    Start: ${Math.round(track.smart_start)}s | End: ${Math.round(track.smart_end)}s
+                                </div>
+                            </div>
+                            ${track.hot_cues && track.hot_cues.length > 0 ? `
+                                <div class="hot-cues">
+                                    ${track.hot_cues.slice(0, 2).map(cue => 
+                                        `<span class="cue-badge">${cue.name}</span>`
+                                    ).join('')}
+                                </div>
+                            ` : ''}
+                            ${track.structure.recommendations.cut_recommendations.length > 0 ? `
+                                <div class="mew-recommendation">
+                                    💡 ${track.structure.recommendations.cut_recommendations[0]}
+                                </div>
+                            ` : ''}
+                        </div>
+                    ` : ''}
                     
                     ${compatibility ? `
                         <div class="compatibility-score">
@@ -753,22 +784,53 @@ class DJMEWv2 {
         }
     }
 
-    // Start track playback via Spotify
+    // Start track playback with MEW's smart timing
     async startTrackPlayback(track) {
-        const response = await fetch('/api/play-track', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ 
-                trackUri: `spotify:track:${track.id}`,
-                deviceId: this.deviceId 
-            })
-        });
+        // Use MEW's smart cut points if available
+        if (track.structure && track.structure.recommendations) {
+            console.log('🧠 Using MEW\'s legendary DJ timing:');
+            console.log(`  - Start: ${track.smart_start}s (skip intro)`);
+            console.log(`  - End: ${track.smart_end}s (cut outro)`);
+            console.log(`  - Duration: ${track.play_duration}s (optimal length)`);
+            
+            const response = await fetch('/api/play-track-smart', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ 
+                    trackUri: `spotify:track:${track.id}`,
+                    deviceId: this.deviceId,
+                    startTime: track.smart_start || 15,
+                    endTime: track.smart_end || 180,
+                    duration: track.duration / 1000
+                })
+            });
 
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.error || 'Failed to play track');
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Failed to play track with smart timing');
+            }
+            
+            const result = await response.json();
+            this.showNotification(`🧠 MEW: Playing ${track.play_duration}s of pure gold! (${result.message})`);
+        } else {
+            // Fallback to regular playback
+            const response = await fetch('/api/play-track', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ 
+                    trackUri: `spotify:track:${track.id}`,
+                    deviceId: this.deviceId 
+                })
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Failed to play track');
+            }
         }
     }
 
@@ -893,6 +955,41 @@ class DJMEWv2 {
                 document.getElementById('current-key').textContent = this.getKeyName(track.analysis.key);
                 document.getElementById('current-energy').textContent = Math.round(track.analysis.energy * 100) + '%';
             }
+            
+            // Show MEW's DJ intelligence for current track
+            this.displayMEWIntelligence(track);
+        }
+    }
+
+    // Display MEW's DJ intelligence decisions
+    displayMEWIntelligence(track) {
+        const nowPlayingEl = document.querySelector('.now-playing');
+        
+        // Remove existing MEW intelligence display
+        const existing = nowPlayingEl.querySelector('.mew-current-decisions');
+        if (existing) {
+            existing.remove();
+        }
+        
+        if (track.structure && track.structure.recommendations) {
+            const mewDecisions = document.createElement('div');
+            mewDecisions.className = 'mew-current-decisions';
+            mewDecisions.innerHTML = `
+                <div class="mew-decision">
+                    <div class="mew-decision-title">🧠 MEW's Legendary DJ Decisions:</div>
+                    <div class="mew-decision-detail">
+                        Playing ${Math.round(track.play_duration)}s of ${Math.round(track.duration/1000)}s total
+                        (Skip ${Math.round(track.smart_start)}s intro, Cut ${Math.round((track.duration/1000) - track.smart_end)}s outro)
+                    </div>
+                    ${track.hot_cues && track.hot_cues.length > 0 ? `
+                        <div class="mew-decision-detail">
+                            🎯 Hot Cues: ${track.hot_cues.map(cue => cue.name).join(', ')}
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+            
+            nowPlayingEl.appendChild(mewDecisions);
         }
     }
 
