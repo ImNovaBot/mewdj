@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI DJ Pro - Festival Level Mixing</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="dj-booth">
+        <header class="booth-header">
+            <h1>🎧 AI DJ Pro</h1>
+            <div class="connection-status">
+                <span id="spotify-status">❌ Not Connected</span>
+                <span id="ai-status">🤖 AI Ready</span>
+            </div>
+        </header>
+
+        <div class="main-deck">
+            <!-- Current Track Display -->
+            <div class="now-playing">
+                <div class="track-info">
+                    <div class="track-artwork">
+                        <img id="current-artwork" src="https://via.placeholder.com/200x200?text=No+Track" alt="Current Track">
+                    </div>
+                    <div class="track-details">
+                        <h2 id="current-title">No Track Playing</h2>
+                        <p id="current-artist">Connect Spotify to start</p>
+                        <div class="track-stats">
+                            <span class="bpm">BPM: <span id="current-bpm">--</span></span>
+                            <span class="key">Key: <span id="current-key">--</span></span>
+                            <span class="energy">Energy: <span id="current-energy">--</span></span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Mix Controls -->
+                <div class="mix-controls">
+                    <button id="play-btn" class="control-btn play">▶️ PLAY</button>
+                    <button id="pause-btn" class="control-btn pause">⏸️ PAUSE</button>
+                    <button id="next-btn" class="control-btn next">⏭️ NEXT</button>
+                    <button id="mix-btn" class="control-btn mix">🎛️ AUTO MIX</button>
+                </div>
+            </div>
+
+            <!-- Crossfader & Effects -->
+            <div class="mixer-section">
+                <div class="crossfader-container">
+                    <label>Crossfader</label>
+                    <input type="range" id="crossfader" min="0" max="100" value="50" class="crossfader">
+                    <div class="crossfader-labels">
+                        <span>A</span>
+                        <span>B</span>
+                    </div>
+                </div>
+
+                <div class="effects-rack">
+                    <button class="effect-btn" data-effect="reverb">🌊 REVERB</button>
+                    <button class="effect-btn" data-effect="filter">🔊 FILTER</button>
+                    <button class="effect-btn" data-effect="echo">📡 ECHO</button>
+                    <button class="effect-btn" data-effect="airhorn">📯 HORN</button>
+                </div>
+            </div>
+
+            <!-- Next Track Preview -->
+            <div class="next-track">
+                <h3>Up Next</h3>
+                <div id="next-track-info">
+                    <p>Queue empty - Add songs or let AI choose</p>
+                </div>
+                <div class="next-controls">
+                    <button id="smart-queue-btn" class="ai-btn">🧠 AI Queue</button>
+                    <button id="manual-add-btn" class="manual-btn">➕ Add Song</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Song Request Interface -->
+        <div class="request-panel">
+            <h3>🎵 Song Requests</h3>
+            <div class="request-input">
+                <input type="text" id="song-request" placeholder="Request a song... (e.g., 'play something energetic' or 'Levels by Avicii')">
+                <button id="request-btn">🚀 REQUEST</button>
+            </div>
+            <div class="smart-suggestions">
+                <button class="suggestion-btn" data-request="play something uplifting">⬆️ Uplifting</button>
+                <button class="suggestion-btn" data-request="drop the bass">🔥 Drop Bass</button>
+                <button class="suggestion-btn" data-request="slow it down">😌 Chill</button>
+                <button class="suggestion-btn" data-request="crowd favorite">👥 Crowd Fav</button>
+            </div>
+        </div>
+
+        <!-- Queue Display -->
+        <div class="queue-panel">
+            <h3>🎵 Queue</h3>
+            <div class="queue-controls">
+                <button id="clear-queue">🗑️ Clear</button>
+                <button id="shuffle-queue">🔀 Shuffle</button>
+                <select id="queue-mode">
+                    <option value="ai-smart">🧠 AI Smart Mix</option>
+                    <option value="harmonic">🎹 Harmonic Only</option>
+                    <option value="energy-flow">⚡ Energy Flow</option>
+                    <option value="manual">✋ Manual</option>
+                </select>
+            </div>
+            <div id="queue-list">
+                <p class="empty-queue">Queue is empty</p>
+            </div>
+        </div>
+
+        <!-- AI DJ Status -->
+        <div class="ai-panel">
+            <h3>🤖 AI DJ Brain</h3>
+            <div class="ai-insights">
+                <div class="insight-item">
+                    <strong>Crowd Energy:</strong> <span id="crowd-energy">Building</span>
+                </div>
+                <div class="insight-item">
+                    <strong>Mix Strategy:</strong> <span id="mix-strategy">Harmonic progression</span>
+                </div>
+                <div class="insight-item">
+                    <strong>Next Move:</strong> <span id="next-move">Waiting for current track...</span>
+                </div>
+            </div>
+            <div class="ai-actions">
+                <button id="ai-takeover" class="ai-btn">🧠 Let AI Take Over</button>
+                <button id="ai-suggest" class="ai-btn">💡 Get Suggestion</button>
+            </div>
+        </div>
+
+        <!-- Connection Panel -->
+        <div id="connection-panel" class="modal" style="display: flex;">
+            <div class="modal-content">
+                <h2>Connect to Spotify</h2>
+                <p>Connect your Spotify Premium account to start DJing</p>
+                <a href="/login" class="connect-btn">🎵 Connect Spotify</a>
+                <p class="note">You need Spotify Premium for full DJ controls</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
