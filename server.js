@@ -277,10 +277,11 @@ app.get('/callback', async (req, res) => {
 // DJ Control endpoints
 app.post('/api/search', async (req, res) => {
     try {
-        const { query } = req.body;
-        const results = await spotify.searchTracks(query);
+        const { query, limit = 20 } = req.body;
+        const results = await spotify.searchTracks(query, limit);
         res.json(results);
     } catch (error) {
+        console.error('Search error:', error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -405,31 +406,182 @@ function broadcast(message) {
 
 // AI Song Request Handler
 async function handleSongRequest(request) {
-    // This is where we'll add AI logic to interpret requests
-    // For now, simple keyword matching
     console.log('Processing song request:', request);
     
-    // Search for the song
-    const results = await spotify.searchTracks(request);
-    if (results.tracks.items.length > 0) {
-        const track = results.tracks.items[0];
-        const analysis = await mixEngine.analyzeTrack(track.id);
+    try {
+        // Check if it's a natural language request vs specific song
+        const isNaturalLanguage = /^(play something|give me|i want|mood|feel like|vibe)/i.test(request.trim());
         
-        djState.queue.push({
-            trackId: track.id,
-            track: track,
-            analysis,
-            addedAt: Date.now(),
-            requestedBy: 'user',
-            request: request
-        });
+        let searchQuery = request;
         
+        if (isNaturalLanguage) {
+            // Process natural language requests
+            searchQuery = await processNaturalLanguageRequest(request);
+            console.log(`Natural language request "${request}" -> search query: "${searchQuery}"`);
+        }
+        
+        // Search for the song
+        const results = await spotify.searchTracks(searchQuery, 5);
+        
+        if (results.tracks && results.tracks.items && results.tracks.items.length > 0) {
+            // For natural language requests, pick based on energy/mood
+            let selectedTrack;
+            
+            if (isNaturalLanguage) {
+                selectedTrack = await selectTrackByMood(results.tracks.items, request);
+            } else {
+                selectedTrack = results.tracks.items[0]; // First result for specific searches
+            }
+            
+            // Analyze the track for DJ mixing
+            const analysis = await mixEngine.analyzeTrack(selectedTrack.id);
+            
+            djState.queue.push({
+                trackId: selectedTrack.id,
+                track: selectedTrack,
+                analysis,
+                addedAt: Date.now(),
+                requestedBy: 'user',
+                request: request,
+                originalRequest: request
+            });
+            
+            const message = isNaturalLanguage ? 
+                `🧠 Found perfect match: "${selectedTrack.name}" by ${selectedTrack.artists[0].name}` :
+                `🎵 Added "${selectedTrack.name}" by ${selectedTrack.artists[0].name} to queue`;
+            
+            broadcast({ 
+                type: 'song-queued', 
+                track: selectedTrack,
+                message: message
+            });
+            
+        } else {
+            broadcast({ 
+                type: 'error', 
+                message: `No tracks found for "${request}". Try a different search!`
+            });
+        }
+        
+    } catch (error) {
+        console.error('Error handling song request:', error);
         broadcast({ 
-            type: 'song-queued', 
-            track: track,
-            message: `Added "${track.name}" by ${track.artists[0].name} to queue`
+            type: 'error', 
+            message: `Failed to process request: ${error.message}`
         });
     }
+}
+
+// Process natural language requests into search queries
+async function processNaturalLanguageRequest(request) {
+    const requestLower = request.toLowerCase();
+    
+    // Mood-based mapping
+    const moodMappings = {
+        'energetic': 'high energy electronic dance music',
+        'uplifting': 'uplifting happy pop music',
+        'chill': 'chill ambient electronic music',
+        'party': 'party dance electronic hits',
+        'sad': 'sad emotional ballad',
+        'romantic': 'romantic love songs',
+        'workout': 'workout motivation electronic',
+        'relaxing': 'relaxing ambient chill music',
+        'happy': 'happy upbeat pop music',
+        'intense': 'intense electronic dubstep',
+        'classic': 'classic rock hits',
+        'hip hop': 'hip hop rap music',
+        'electronic': 'electronic dance music EDM',
+        'pop': 'popular pop hits'
+    };
+    
+    // Check for mood keywords
+    for (const [mood, searchTerm] of Object.entries(moodMappings)) {
+        if (requestLower.includes(mood)) {
+            return searchTerm;
+        }
+    }
+    
+    // Genre extraction
+    const genres = ['rock', 'pop', 'hip hop', 'rap', 'electronic', 'edm', 'house', 'techno', 'dubstep', 'jazz', 'classical', 'country', 'r&b', 'funk', 'reggae'];
+    for (const genre of genres) {
+        if (requestLower.includes(genre)) {
+            return `${genre} music hits`;
+        }
+    }
+    
+    // Time-based requests
+    if (requestLower.includes('90s') || requestLower.includes('nineties')) return '90s hits music';
+    if (requestLower.includes('2000s') || requestLower.includes('2000')) return '2000s pop hits';
+    if (requestLower.includes('80s') || requestLower.includes('eighties')) return '80s classic hits';
+    
+    // Default fallback - extract meaningful words
+    const meaningfulWords = request.split(' ').filter(word => 
+        word.length > 2 && 
+        !['play', 'something', 'give', 'me', 'want', 'like', 'the', 'and', 'with'].includes(word.toLowerCase())
+    ).join(' ');
+    
+    return meaningfulWords || 'popular music hits';
+}
+
+// Select best track based on mood/request
+async function selectTrackByMood(tracks, originalRequest) {
+    const requestLower = originalRequest.toLowerCase();
+    
+    // Get audio features for all tracks to make smart selection
+    const tracksWithFeatures = [];
+    
+    for (const track of tracks.slice(0, 3)) { // Analyze top 3 results
+        try {
+            const features = await spotify.getAudioFeatures(track.id);
+            tracksWithFeatures.push({ track, features });
+        } catch (error) {
+            console.error('Failed to get audio features for', track.name, error);
+            tracksWithFeatures.push({ track, features: null });
+        }
+    }
+    
+    // Score tracks based on request
+    let bestTrack = tracksWithFeatures[0];
+    let bestScore = 0;
+    
+    for (const { track, features } of tracksWithFeatures) {
+        let score = 0;
+        
+        if (!features) {
+            score = Math.random(); // Random score if no features available
+        } else {
+            // Score based on energy and valence for different moods
+            if (requestLower.includes('energetic') || requestLower.includes('party')) {
+                score += features.energy * 2 + features.danceability;
+            }
+            
+            if (requestLower.includes('happy') || requestLower.includes('uplifting')) {
+                score += features.valence * 2 + features.energy;
+            }
+            
+            if (requestLower.includes('chill') || requestLower.includes('relaxing')) {
+                score += (1 - features.energy) + (features.valence * 0.5);
+            }
+            
+            if (requestLower.includes('sad')) {
+                score += (1 - features.valence) * 2;
+            }
+            
+            if (requestLower.includes('workout') || requestLower.includes('intense')) {
+                score += features.energy * 2 + features.loudness / 10;
+            }
+            
+            // Bonus for higher popularity
+            score += (track.popularity / 100) * 0.5;
+        }
+        
+        if (score > bestScore) {
+            bestScore = score;
+            bestTrack = { track, features };
+        }
+    }
+    
+    return bestTrack.track;
 }
 
 const PORT = process.env.PORT || 3000;

@@ -93,7 +93,10 @@
         <div class="request-panel">
             <h3>🎵 Song Requests</h3>
             <div class="request-input">
-                <input type="text" id="song-request" placeholder="Request a song... (e.g., 'play something energetic' or 'Levels by Avicii')">
+                <div class="search-container">
+                    <input type="text" id="song-request" placeholder="Request a song... (e.g., 'play something energetic' or 'Levels by Avicii')" autocomplete="off">
+                    <div class="search-suggestions" id="search-suggestions"></div>
+                </div>
                 <button id="request-btn">🚀 REQUEST</button>
             </div>
             <div class="smart-suggestions">

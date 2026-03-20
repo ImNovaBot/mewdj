@@ -99,6 +99,9 @@ class AIdjPro {
             this.toggleAutoMix();
         });
 
+        // Search functionality
+        this.initSearchFeatures();
+
         // Effects
         document.querySelectorAll('.effect-btn').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -339,7 +342,13 @@ class AIdjPro {
         const requestInput = document.getElementById('song-request');
         const request = customRequest || requestInput.value.trim();
         
-        if (!request) return;
+        if (!request) {
+            this.showNotification('⚠️ Please enter a song or mood request', 'error');
+            return;
+        }
+        
+        // Hide suggestions when submitting
+        this.hideSuggestions();
         
         this.sendCommand('request-song', { request });
         
@@ -347,7 +356,13 @@ class AIdjPro {
             requestInput.value = '';
         }
         
-        this.showNotification(`🎵 Processing request: "${request}"`);
+        // Show different messages based on request type
+        const isNaturalLanguage = /^(play something|give me|i want|mood|feel like|vibe)/i.test(request.trim());
+        const message = isNaturalLanguage ? 
+            `🧠 Finding perfect match for: "${request}"` :
+            `🎵 Adding to queue: "${request}"`;
+            
+        this.showNotification(message);
     }
 
     toggleEffect(effectName) {
@@ -440,6 +455,178 @@ class AIdjPro {
     generateSmartQueue() {
         this.sendCommand('generate-smart-queue');
         this.showNotification('🧠 Generating smart queue...');
+    }
+
+    initSearchFeatures() {
+        const searchInput = document.getElementById('song-request');
+        const suggestionsContainer = document.getElementById('search-suggestions');
+        
+        let searchTimeout = null;
+        let selectedIndex = -1;
+        let currentSuggestions = [];
+
+        // Debounced search as user types
+        searchInput.addEventListener('input', (e) => {
+            const query = e.target.value.trim();
+            
+            clearTimeout(searchTimeout);
+            selectedIndex = -1;
+
+            if (query.length < 2) {
+                this.hideSuggestions();
+                return;
+            }
+
+            // Show loading state
+            suggestionsContainer.innerHTML = '<div class="search-loading">🔍 Searching...</div>';
+            suggestionsContainer.classList.add('show');
+
+            // Debounce search requests
+            searchTimeout = setTimeout(() => {
+                this.searchSpotifyTracks(query);
+            }, 300);
+        });
+
+        // Keyboard navigation
+        searchInput.addEventListener('keydown', (e) => {
+            const suggestions = document.querySelectorAll('.suggestion-item');
+            
+            switch (e.key) {
+                case 'ArrowDown':
+                    e.preventDefault();
+                    selectedIndex = Math.min(selectedIndex + 1, suggestions.length - 1);
+                    this.updateSelectedSuggestion();
+                    break;
+                    
+                case 'ArrowUp':
+                    e.preventDefault();
+                    selectedIndex = Math.max(selectedIndex - 1, -1);
+                    this.updateSelectedSuggestion();
+                    break;
+                    
+                case 'Enter':
+                    e.preventDefault();
+                    if (selectedIndex >= 0 && currentSuggestions[selectedIndex]) {
+                        this.selectSuggestion(currentSuggestions[selectedIndex]);
+                    } else {
+                        this.submitSongRequest();
+                    }
+                    break;
+                    
+                case 'Escape':
+                    this.hideSuggestions();
+                    searchInput.blur();
+                    break;
+            }
+        });
+
+        // Hide suggestions when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!searchInput.contains(e.target) && !suggestionsContainer.contains(e.target)) {
+                this.hideSuggestions();
+            }
+        });
+
+        // Focus input shows recent suggestions if any
+        searchInput.addEventListener('focus', () => {
+            if (currentSuggestions.length > 0 && searchInput.value.trim().length >= 2) {
+                suggestionsContainer.classList.add('show');
+            }
+        });
+    }
+
+    async searchSpotifyTracks(query) {
+        try {
+            const response = await fetch('/api/search', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ query, limit: 8 })
+            });
+
+            if (!response.ok) {
+                throw new Error('Search failed');
+            }
+
+            const data = await response.json();
+            currentSuggestions = data.tracks?.items || [];
+            
+            this.displaySuggestions(currentSuggestions);
+        } catch (error) {
+            console.error('Search error:', error);
+            document.getElementById('search-suggestions').innerHTML = 
+                '<div class="search-no-results">⚠️ Search failed. Try again.</div>';
+        }
+    }
+
+    displaySuggestions(tracks) {
+        const suggestionsContainer = document.getElementById('search-suggestions');
+        
+        if (tracks.length === 0) {
+            suggestionsContainer.innerHTML = '<div class="search-no-results">🎵 No tracks found</div>';
+            return;
+        }
+
+        const html = tracks.map((track, index) => {
+            const duration = this.formatDuration(track.duration_ms);
+            const imageUrl = track.album?.images?.[2]?.url || 'https://via.placeholder.com/40x40?text=♪';
+            
+            return `
+                <div class="suggestion-item" data-index="${index}">
+                    <img src="${imageUrl}" alt="Album" class="suggestion-artwork">
+                    <div class="suggestion-info">
+                        <p class="suggestion-title">${this.escapeHtml(track.name)}</p>
+                        <p class="suggestion-artist">${this.escapeHtml(track.artists?.map(a => a.name).join(', ') || 'Unknown Artist')}</p>
+                    </div>
+                    <div class="suggestion-duration">${duration}</div>
+                </div>
+            `;
+        }).join('');
+
+        suggestionsContainer.innerHTML = html;
+        suggestionsContainer.classList.add('show');
+
+        // Add click listeners to suggestions
+        document.querySelectorAll('.suggestion-item').forEach((item, index) => {
+            item.addEventListener('click', () => {
+                this.selectSuggestion(tracks[index]);
+            });
+        });
+    }
+
+    updateSelectedSuggestion() {
+        document.querySelectorAll('.suggestion-item').forEach((item, index) => {
+            item.classList.toggle('selected', index === selectedIndex);
+        });
+    }
+
+    selectSuggestion(track) {
+        const searchInput = document.getElementById('song-request');
+        searchInput.value = `${track.name} by ${track.artists?.[0]?.name || 'Unknown'}`;
+        
+        this.hideSuggestions();
+        
+        // Auto-submit the selected track
+        this.submitSongRequest();
+    }
+
+    hideSuggestions() {
+        document.getElementById('search-suggestions').classList.remove('show');
+        selectedIndex = -1;
+    }
+
+    formatDuration(ms) {
+        const seconds = Math.floor(ms / 1000);
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    }
+
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 
     showManualAddDialog() {

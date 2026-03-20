@@ -307,18 +307,122 @@ body {
     margin-bottom: 20px;
 }
 
-.request-input input {
+.search-container {
     flex: 1;
+    position: relative;
+}
+
+.request-input input {
+    width: 100%;
     padding: 15px;
-    background: rgba(0, 0, 0, 0.3);
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: linear-gradient(145deg, rgba(26, 13, 38, 0.6), rgba(45, 27, 66, 0.4));
+    border: 1px solid rgba(138, 43, 226, 0.3);
     border-radius: 25px;
     color: white;
     font-size: 1rem;
+    transition: all 0.3s ease;
+}
+
+.request-input input:focus {
+    outline: none;
+    border-color: rgba(168, 85, 247, 0.6);
+    box-shadow: 0 0 20px rgba(168, 85, 247, 0.2);
 }
 
 .request-input input::placeholder {
-    color: #999;
+    color: #a1a1aa;
+}
+
+.search-suggestions {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: linear-gradient(145deg, rgba(26, 13, 38, 0.95), rgba(45, 27, 66, 0.9));
+    border: 1px solid rgba(138, 43, 226, 0.4);
+    border-radius: 15px;
+    backdrop-filter: blur(10px);
+    max-height: 300px;
+    overflow-y: auto;
+    z-index: 1000;
+    margin-top: 5px;
+    display: none;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+}
+
+.search-suggestions.show {
+    display: block;
+}
+
+.suggestion-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border-bottom: 1px solid rgba(138, 43, 226, 0.1);
+}
+
+.suggestion-item:hover, .suggestion-item.selected {
+    background: linear-gradient(90deg, rgba(168, 85, 247, 0.2), rgba(192, 132, 252, 0.1));
+    border-color: rgba(168, 85, 247, 0.3);
+}
+
+.suggestion-item:last-child {
+    border-bottom: none;
+}
+
+.suggestion-artwork {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    background: rgba(138, 43, 226, 0.2);
+    flex-shrink: 0;
+}
+
+.suggestion-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.suggestion-title {
+    font-weight: bold;
+    color: #c084fc;
+    margin: 0 0 4px 0;
+    font-size: 0.95rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.suggestion-artist {
+    color: #a1a1aa;
+    margin: 0;
+    font-size: 0.85rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.suggestion-duration {
+    color: #71717a;
+    font-size: 0.8rem;
+    flex-shrink: 0;
+}
+
+.search-loading {
+    padding: 16px;
+    text-align: center;
+    color: #a855f7;
+    font-style: italic;
+}
+
+.search-no-results {
+    padding: 16px;
+    text-align: center;
+    color: #71717a;
+    font-style: italic;
 }
 
 .request-input button {
@@ -606,5 +710,31 @@ body {
     
     .effects-rack {
         grid-template-columns: 1fr;
+    }
+    
+    .search-suggestions {
+        max-height: 250px;
+    }
+    
+    .suggestion-item {
+        padding: 10px 12px;
+    }
+    
+    .suggestion-artwork {
+        width: 35px;
+        height: 35px;
+    }
+    
+    .suggestion-title {
+        font-size: 0.9rem;
+    }
+    
+    .suggestion-artist {
+        font-size: 0.8rem;
+    }
+    
+    .spotify-status-tooltip {
+        right: -10px;
+        min-width: 220px;
     }
 }
