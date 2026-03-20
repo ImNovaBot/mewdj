@@ -1437,6 +1437,118 @@ app.get('/api/queue-vibe', (req, res) => {
     }
 });
 
+// Set MEW's party mode (DJ style focus)
+app.post('/api/set-party-mode', (req, res) => {
+    try {
+        const { mode } = req.body;
+        
+        const partyModes = {
+            'legendary-mix': { 
+                name: 'Legendary Mix', 
+                description: 'MEW chooses techniques from all genres - ultimate party intelligence',
+                priority_genres: ['all'],
+                energy_preference: 'adaptive'
+            },
+            'hip-hop-party': {
+                name: 'Hip-Hop Party',
+                description: 'DJ Khaled meets DJ Premier - classic hip-hop party vibes',
+                priority_genres: ['hip-hop', 'rap', 'trap'],
+                energy_preference: 'high'
+            },
+            'electronic-rave': {
+                name: 'Electronic Rave',
+                description: 'Deadmau5 meets Skrillex - festival electronic energy',
+                priority_genres: ['electronic', 'high-energy-dance'],
+                energy_preference: 'maximum'
+            },
+            'latin-fiesta': {
+                name: 'Latin Fiesta',
+                description: 'DJ Nelson reggaeton party - authentic Latin celebration',
+                priority_genres: ['reggaeton', 'latin'],
+                energy_preference: 'party'
+            },
+            'smooth-vibes': {
+                name: 'Smooth Vibes',
+                description: '9th Wonder meets Jazzy Jeff - sophisticated party flow',
+                priority_genres: ['r&b', 'chill', 'feel-good'],
+                energy_preference: 'smooth'
+            },
+            'mainstream-party': {
+                name: 'Mainstream Party',
+                description: 'David Guetta meets Diplo - crowd-pleasing party hits',
+                priority_genres: ['pop', 'electronic'],
+                energy_preference: 'crowd-pleasing'
+            }
+        };
+        
+        if (!partyModes[mode]) {
+            return res.status(400).json({ error: 'Invalid party mode' });
+        }
+        
+        djState.partyMode = partyModes[mode];
+        console.log(`🎛️ MEW party mode set to: ${partyModes[mode].name}`);
+        
+        // Broadcast party mode change
+        broadcast({ 
+            type: 'party-mode-update', 
+            mode: djState.partyMode,
+            message: `🔥 MEW is now in ${partyModes[mode].name} mode!`
+        });
+        
+        res.json({ 
+            success: true, 
+            mode: djState.partyMode,
+            available_modes: partyModes
+        });
+        
+    } catch (error) {
+        console.error('Party mode error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get available party modes
+app.get('/api/party-modes', (req, res) => {
+    const partyModes = {
+        'legendary-mix': { 
+            name: 'Legendary Mix', 
+            description: 'MEW chooses techniques from all genres - ultimate party intelligence',
+            emoji: '🔮'
+        },
+        'hip-hop-party': {
+            name: 'Hip-Hop Party',
+            description: 'DJ Khaled meets DJ Premier - classic hip-hop party vibes',
+            emoji: '🎤'
+        },
+        'electronic-rave': {
+            name: 'Electronic Rave',
+            description: 'Deadmau5 meets Skrillex - festival electronic energy',
+            emoji: '⚡'
+        },
+        'latin-fiesta': {
+            name: 'Latin Fiesta',
+            description: 'DJ Nelson reggaeton party - authentic Latin celebration',
+            emoji: '🌶️'
+        },
+        'smooth-vibes': {
+            name: 'Smooth Vibes',
+            description: '9th Wonder meets Jazzy Jeff - sophisticated party flow',
+            emoji: '🪐'
+        },
+        'mainstream-party': {
+            name: 'Mainstream Party',
+            description: 'David Guetta meets Diplo - crowd-pleasing party hits',
+            emoji: '🎉'
+        }
+    };
+    
+    res.json({ 
+        success: true, 
+        modes: partyModes,
+        current_mode: djState.partyMode || partyModes['legendary-mix']
+    });
+});
+
 // Test audio features endpoint
 app.get('/api/test-audio-features/:trackId', async (req, res) => {
     try {

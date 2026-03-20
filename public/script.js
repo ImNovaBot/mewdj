@@ -756,10 +756,10 @@ class DJMEWv2 {
         }
     }
 
-    // Perform intelligent DJ transition with varied techniques
+    // Perform intelligent DJ transition with varied techniques - FIXED: NO AUDIO BLOCKING!
     async performDJTransition(fromTrack, toTrack) {
         console.log('🎛️ MEW\'s legendary DJ intelligence activating...');
-        console.log(`🎵 Transitioning: ${fromTrack.name} (${fromTrack.bpm} BPM) → ${toTrack.name} (${toTrack.bpm} BPM)`);
+        console.log(`🎵 Transitioning: ${fromTrack.name} → ${toTrack.name}`);
         
         try {
             // Get current queue vibe for intelligent technique selection
@@ -774,22 +774,23 @@ class DJMEWv2 {
             // Show MEW's creative decision
             this.showNotification(`🔮 MEW: ${technique.description}`, 'dj-transition');
             
-            // Execute the chosen technique
-            await this.executeTransitionTechnique(technique, fromTrack, toTrack);
+            // IMMEDIATELY start playing next track (NO BLOCKING)
+            await this.startTrackPlayback(toTrack);
+            
+            // Do visual effects AFTER music starts (non-blocking)
+            this.performVisualTransition(technique, fromTrack, toTrack);
             
             // Track transition in persistent stats
             this.trackTransition();
-            
-            // Start playing next track with perfect timing
-            await this.startTrackPlayback(toTrack);
             
             console.log(`✨ ${technique.name} complete! Legendary transition achieved!`);
             this.showNotification(`✨ ${technique.success_message}`);
             
         } catch (error) {
             console.error('❌ Advanced transition failed:', error);
-            // Fallback to basic transition
-            await this.basicTransition(fromTrack, toTrack);
+            // Fallback: just start the next track
+            await this.startTrackPlayback(toTrack);
+            this.trackTransition();
         }
     }
 
@@ -955,29 +956,32 @@ class DJMEWv2 {
         return { ...techniques.psychic_crossfade, key: 'psychic_crossfade' };
     }
 
-    // Execute the chosen transition technique with effects
-    async executeTransitionTechnique(technique, fromTrack, toTrack) {
-        console.log(`🎛️ Executing ${technique.name}...`);
+    // Execute the chosen transition technique with effects - FIXED: NON-BLOCKING!
+    executeTransitionTechnique(technique, fromTrack, toTrack) {
+        console.log(`🎛️ Executing ${technique.name} (non-blocking)...`);
         
-        // Visual effects sequence
+        // Visual effects sequence (non-blocking)
         const effectDuration = technique.duration / technique.effects.length;
         
-        for (let i = 0; i < technique.effects.length; i++) {
-            const effect = technique.effects[i];
-            console.log(`🎪 Applying ${effect} effect`);
-            
-            // Activate visual effect
-            this.activateTransitionEffect(effect);
-            
-            // Show crossfader movement
-            this.animateCrossfader(i / technique.effects.length);
-            
-            // Wait for effect duration
-            await new Promise(resolve => setTimeout(resolve, effectDuration));
-        }
+        technique.effects.forEach((effect, i) => {
+            setTimeout(() => {
+                console.log(`🎪 Applying ${effect} effect`);
+                
+                // Activate visual effect
+                this.activateTransitionEffect(effect);
+                
+                // Show crossfader movement
+                this.animateCrossfader(i / technique.effects.length);
+            }, effectDuration * i);
+        });
         
         // Final crossfader position
-        this.animateCrossfader(1.0);
+        setTimeout(() => {
+            this.animateCrossfader(1.0);
+        }, technique.duration);
+        
+        // Return immediately (non-blocking)
+        return Promise.resolve();
     }
 
     // Activate specific transition effect visually - LEGENDARY DJ EFFECTS!
@@ -1654,10 +1658,45 @@ class DJMEWv2 {
                 this.showNotification('❌ DJ MEW player disconnected', 'error');
             });
 
-            // Player state changes
+            // Player state changes - ENHANCED FOR AUTO-PLAY!
             this.player.addListener('player_state_changed', (state) => {
-                if (state) {
-                    this.updatePlayerState(state);
+                if (!state) return;
+                
+                console.log('🎵 Player state changed:', {
+                    paused: state.paused,
+                    position: state.position,
+                    duration: state.duration,
+                    track: state.track_window.current_track?.name
+                });
+                
+                this.updatePlayerState(state);
+                
+                // CRITICAL: Detect when track ends and auto-play next
+                if (state.track_window.current_track && 
+                    state.paused && 
+                    state.position === 0 && 
+                    state.duration > 0) {
+                    
+                    console.log('🔚 Track ended, starting auto-play...');
+                    this.handleTrackEnded(state.track_window.current_track);
+                }
+                
+                // Prepare for smooth transitions (10 seconds before end)
+                if (!state.paused && 
+                    state.track_window.current_track && 
+                    state.duration > 0) {
+                    
+                    const timeRemaining = state.duration - state.position;
+                    if (timeRemaining < 10000 && timeRemaining > 8000 && !this.transitionPrepared) {
+                        console.log('🎛️ Preparing for transition...');
+                        this.prepareNextTrack();
+                        this.transitionPrepared = true;
+                        
+                        // Reset flag after track change
+                        setTimeout(() => {
+                            this.transitionPrepared = false;
+                        }, 15000);
+                    }
                 }
             });
             
@@ -1727,15 +1766,129 @@ class DJMEWv2 {
         if (state.track_window.current_track) {
             const track = state.track_window.current_track;
             this.state.currentTrack = {
+                id: track.id,
                 name: track.name,
                 artist: track.artists[0]?.name,
                 album: track.album.name,
-                image: track.album.images[0]?.url
+                image: track.album.images[0]?.url,
+                duration_ms: track.duration_ms,
+                position: state.position,
+                is_playing: !state.paused
             };
         }
         
         this.updateNowPlaying();
         this.updatePlaybackControls();
+    }
+
+    // Handle track ending - AUTO-PLAY NEXT TRACK!
+    async handleTrackEnded(endedTrack) {
+        console.log('🔚 Track ended:', endedTrack.name);
+        
+        // Find current track position in queue
+        const currentIndex = this.state.queue.findIndex(track => track.id === endedTrack.id);
+        
+        if (currentIndex >= 0 && currentIndex < this.state.queue.length - 1) {
+            // There's a next track in queue
+            const nextTrack = this.state.queue[currentIndex + 1];
+            console.log('▶️ Auto-playing next track:', nextTrack.name);
+            
+            // Update current track
+            this.state.currentTrack = nextTrack;
+            
+            // Play with legendary transition (NO AUDIO BLOCKING)
+            await this.playNextTrackWithTransition(endedTrack, nextTrack);
+            
+        } else {
+            console.log('🏁 End of queue reached');
+            this.showNotification('🏁 Queue finished! Add more tracks or let MEW suggest some!');
+            
+            // Suggest more songs after queue ends
+            if (this.state.queue.length > 2) {
+                setTimeout(() => {
+                    this.showNotification('🤖 Want MEW to auto-add more songs for this vibe?');
+                }, 3000);
+            }
+        }
+    }
+
+    // Prepare for smooth transition (called near end of track)
+    prepareNextTrack() {
+        const currentTrack = this.state.currentTrack;
+        if (!currentTrack) return;
+        
+        const currentIndex = this.state.queue.findIndex(track => track.id === currentTrack.id);
+        if (currentIndex >= 0 && currentIndex < this.state.queue.length - 1) {
+            const nextTrack = this.state.queue[currentIndex + 1];
+            console.log('🎛️ Preparing transition to:', nextTrack.name);
+        }
+    }
+
+    // Play next track with legendary transition - FIXED: NO AUDIO BLOCKING!
+    async playNextTrackWithTransition(fromTrack, toTrack) {
+        try {
+            console.log('🎛️ Starting legendary DJ transition...');
+            console.log(`🎵 From: ${fromTrack.name} → To: ${toTrack.name}`);
+            
+            // Get current vibe for intelligent technique selection
+            const vibeResponse = await fetch('/api/queue-vibe');
+            const { vibe } = await vibeResponse.json();
+            
+            // MEW selects the perfect technique
+            const technique = this.selectIntelligentTransition(fromTrack, toTrack, vibe);
+            console.log(`🧠 MEW selected: ${technique.name}`);
+            
+            // Show MEW's creative decision
+            this.showNotification(`🔮 MEW: ${technique.description}`, 'dj-transition');
+            
+            // IMMEDIATELY start playing next track (NO DELAYS OR BLOCKING)
+            await this.startTrackPlayback(toTrack);
+            
+            // Do visual transition effects AFTER music starts (non-blocking)
+            this.performVisualTransition(technique, fromTrack, toTrack);
+            
+            // Track the transition for persistent stats
+            this.trackTransition();
+            
+            // Show success message
+            setTimeout(() => {
+                this.showNotification(`✨ ${technique.success_message}`);
+            }, 1500);
+            
+            console.log('✅ Legendary transition complete!');
+            
+        } catch (error) {
+            console.error('❌ Transition failed, using direct playback:', error);
+            // Fallback: just play the next track
+            await this.startTrackPlayback(toTrack);
+            this.trackTransition();
+        }
+    }
+
+    // Perform visual transition effects (NO AUDIO INTERFERENCE)
+    performVisualTransition(technique, fromTrack, toTrack) {
+        console.log(`🎪 Performing visual effects for: ${technique.name}`);
+        
+        // Show crossfader movement
+        this.animateCrossfader(0.5); // Start at center
+        
+        // Execute visual effect sequence
+        const effects = technique.effects || ['crossfade_magic'];
+        const effectDuration = technique.duration / effects.length;
+        
+        effects.forEach((effect, index) => {
+            setTimeout(() => {
+                this.activateTransitionEffect(effect);
+                // Move crossfader smoothly during transition
+                const progress = (index + 1) / effects.length;
+                this.animateCrossfader(progress);
+            }, effectDuration * index);
+        });
+        
+        // Reset crossfader after transition
+        setTimeout(() => {
+            this.animateCrossfader(0.5);
+        }, technique.duration);
     }
 
     updateUI() {
@@ -1947,6 +2100,124 @@ class DJMEWv2 {
             document.body.removeChild(modal);
         }
         this.currentSuggestions = null;
+    }
+
+    // Show MEW's party mode selector
+    async showPartyModes() {
+        try {
+            console.log('🎛️ Loading MEW party modes...');
+            
+            const response = await fetch('/api/party-modes');
+            if (!response.ok) {
+                throw new Error('Failed to load party modes');
+            }
+            
+            const result = await response.json();
+            const modes = result.modes;
+            const currentMode = result.current_mode;
+            
+            // Create party mode modal
+            const modal = document.createElement('div');
+            modal.className = 'party-mode-modal';
+            modal.innerHTML = `
+                <div class="party-mode-content">
+                    <h3>🎛️ Choose MEW's DJ Style</h3>
+                    <p class="current-mode">Current: ${currentMode.name}</p>
+                    
+                    <div class="party-modes-list">
+                        ${Object.entries(modes).map(([key, mode]) => `
+                            <div class="party-mode-item ${currentMode.name === mode.name ? 'active' : ''}">
+                                <div class="mode-header">
+                                    <span class="mode-emoji">${mode.emoji}</span>
+                                    <h4>${mode.name}</h4>
+                                </div>
+                                <p class="mode-description">${mode.description}</p>
+                                <button class="select-mode-btn" onclick="aidj.setPartyMode('${key}')">
+                                    ${currentMode.name === mode.name ? '✅ Active' : '🎛️ Select'}
+                                </button>
+                            </div>
+                        `).join('')}
+                    </div>
+                    
+                    <div class="mode-actions">
+                        <button class="mode-btn close" onclick="aidj.closePartyModes()">❌ Close</button>
+                    </div>
+                </div>
+            `;
+            
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0, 0, 0, 0.8);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 1000;
+            `;
+            
+            document.body.appendChild(modal);
+            
+        } catch (error) {
+            console.error('Party modes error:', error);
+            this.showNotification('Failed to load party modes: ' + error.message, 'error');
+        }
+    }
+
+    // Set MEW's party mode
+    async setPartyMode(mode) {
+        try {
+            console.log(`🎛️ Setting MEW party mode to: ${mode}`);
+            
+            const response = await fetch('/api/set-party-mode', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ mode })
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to set party mode');
+            }
+
+            const result = await response.json();
+            console.log('🔥 MEW party mode updated:', result.mode);
+
+            this.showNotification(`🔥 ${result.message}`);
+            this.closePartyModes();
+            
+            // Update party mode display
+            this.updatePartyModeDisplay(result.mode);
+            
+        } catch (error) {
+            console.error('Set party mode error:', error);
+            this.showNotification('Failed to set party mode: ' + error.message, 'error');
+        }
+    }
+
+    // Close party modes modal
+    closePartyModes() {
+        const modal = document.querySelector('.party-mode-modal');
+        if (modal) {
+            document.body.removeChild(modal);
+        }
+    }
+
+    // Update party mode display
+    updatePartyModeDisplay(mode) {
+        // Update any UI elements that show current party mode
+        const currentModeEl = document.getElementById('current-party-mode');
+        if (currentModeEl) {
+            currentModeEl.innerHTML = `
+                <div class="current-mode-display">
+                    <span class="mode-name">${mode.name}</span>
+                    <span class="mode-desc">${mode.description}</span>
+                </div>
+            `;
+        }
     }
 
     // Debug function to check queue state
