@@ -793,60 +793,137 @@ class DJMEWv2 {
         }
     }
 
-    // Select intelligent transition technique based on vibe and tracks
+    // Select intelligent transition technique based on vibe and tracks - LEGENDARY DJ STYLES!
     selectIntelligentTransition(fromTrack, toTrack, vibe) {
         const energyChange = (toTrack.energy || 50) - (fromTrack.energy || 50);
         const bpmChange = Math.abs((toTrack.bpm || 120) - (fromTrack.bpm || 120));
         
         const techniques = {
-            // High-energy/party techniques
-            'air_horn_slam': {
-                name: 'Air Horn Energy Slam',
-                description: 'Building massive energy with air horn',
-                condition: vibe.mood === 'party' && energyChange > 10,
-                effects: ['air_horn', 'crowd_buildup', 'impact_slam'],
+            // HIP-HOP & RAP DJ TECHNIQUES (DJ Khaled, DJ Drama, DJ Premier style)
+            'dj_khaled_air_horn': {
+                name: 'DJ Khaled Air Horn Blast',
+                description: 'WE THE BEST! Classic hip-hop air horn slam',
+                condition: (vibe.primary_genre === 'hip-hop' || vibe.primary_genre === 'rap') && energyChange > 5,
+                effects: ['triple_air_horn', 'dj_khaled_vocal', 'impact_slam'],
                 duration: 3000,
-                success_message: 'LEGENDARY energy slam! Crowd is going wild!'
+                success_message: 'WE THE BEST MUSIC! Air horn legendary status!'
             },
             
+            'scratch_technique': {
+                name: 'Turntable Scratch Mix',
+                description: 'Classic hip-hop scratch transition',
+                condition: vibe.primary_genre === 'hip-hop' || vibe.primary_genre === 'rap',
+                effects: ['turntable_scratch', 'vinyl_cut', 'scratch_blend'],
+                duration: 4000,
+                success_message: 'Scratch master! Old school hip-hop vibes!'
+            },
+            
+            'rewind_effect': {
+                name: 'Rewind & Drop',
+                description: 'Dramatic rewind into explosive drop',
+                condition: (vibe.primary_genre === 'hip-hop' || vibe.primary_genre === 'trap') && toTrack.energy > 60,
+                effects: ['rewind_sound', 'pause_silence', 'explosive_drop'],
+                duration: 5000,
+                success_message: 'REWIND! Drop hit different! Party going crazy!'
+            },
+            
+            // TRAP & MODERN RAP TECHNIQUES (Metro Boomin, DJ Mustard style)
+            'trap_buildup_drop': {
+                name: 'Trap Buildup Drop',
+                description: 'Modern trap style buildup and drop',
+                condition: vibe.primary_genre === 'trap' && energyChange > 10,
+                effects: ['trap_buildup', 'silence_pause', 'bass_drop_impact'],
+                duration: 6000,
+                success_message: 'TRAP ACTIVATED! Bass drop demolished the club!'
+            },
+            
+            'dj_tag_transition': {
+                name: 'Producer Tag Transition',
+                description: 'Signature producer tag into next track',
+                condition: vibe.primary_genre === 'hip-hop' || vibe.primary_genre === 'trap',
+                effects: ['metro_boomin_tag', 'dj_mustard_tag', 'smooth_transition'],
+                duration: 3500,
+                success_message: 'Producer tag fire! That transition was CLEAN!'
+            },
+            
+            // REGGAETON & LATIN TECHNIQUES (DJ Nelson, Luny Tunes style)
+            'reggaeton_air_horn': {
+                name: 'Reggaeton Air Horn Party',
+                description: 'Latin party air horn celebration',
+                condition: vibe.primary_genre === 'reggaeton' || vibe.primary_genre === 'latin',
+                effects: ['latin_air_horn', 'crowd_chant', 'perreo_buildup'],
+                duration: 4000,
+                success_message: 'DALE! Reggaeton vibes activated! Party is LIT!'
+            },
+            
+            'vocal_shout_transition': {
+                name: 'Latin Vocal Shout',
+                description: 'Energetic Latin vocal transition',
+                condition: vibe.primary_genre === 'reggaeton' && vibe.mood === 'party',
+                effects: ['spanish_vocal_shout', 'party_whistle', 'latin_buildup'],
+                duration: 3000,
+                success_message: '¡FUEGO! Latin party energy through the roof!'
+            },
+            
+            // ELECTRONIC & RAVE TECHNIQUES (Deadmau5, Calvin Harris, Skrillex style)
             'laser_sweep_drop': {
                 name: 'Laser Sweep Drop',
-                description: 'Electronic laser sweep into drop',
+                description: 'Electronic laser sweep into massive drop',
                 condition: vibe.primary_genre === 'electronic' || vibe.primary_genre === 'high-energy-dance',
                 effects: ['laser_sweep', 'whoosh', 'electronic_drop'],
                 duration: 4000,
                 success_message: 'Perfect laser drop! Pure electronic magic!'
             },
             
+            'rave_siren_buildup': {
+                name: 'Rave Siren Buildup',
+                description: 'Classic rave siren into euphoric drop',
+                condition: vibe.mood === 'rave' || (vibe.primary_genre === 'electronic' && energyChange > 15),
+                effects: ['rave_siren', 'crowd_buildup', 'euphoric_drop'],
+                duration: 8000,
+                success_message: 'RAVE MODE ACTIVATED! Siren drop was INSANE!'
+            },
+            
+            // POP & MAINSTREAM TECHNIQUES (David Guetta, Diplo style)
+            'pop_party_buildup': {
+                name: 'Pop Party Buildup',
+                description: 'Mainstream party energy buildup',
+                condition: vibe.primary_genre === 'pop' && vibe.mood === 'uplifting',
+                effects: ['crowd_cheer', 'party_whistle', 'pop_drop'],
+                duration: 5000,
+                success_message: 'Pop party vibes! Everyone singing along!'
+            },
+            
+            // SMOOTH & R&B TECHNIQUES
+            'smooth_vocal_blend': {
+                name: 'Smooth R&B Vocal Blend',
+                description: 'Silky smooth R&B transition',
+                condition: vibe.primary_genre === 'r&b' || vibe.mood === 'smooth',
+                effects: ['smooth_vocal', 'reverb_tail', 'silk_transition'],
+                duration: 7000,
+                success_message: 'Smooth as silk! R&B vibes flowing perfectly!'
+            },
+            
+            // CROWD INTERACTION TECHNIQUES (Big room DJ style)
             'crowd_cheer_buildup': {
-                name: 'Crowd Cheer Buildup',
-                description: 'Crowd energy building into anthem',
+                name: 'Crowd Energy Explosion',
+                description: 'Massive crowd energy buildup',
                 condition: vibe.mood === 'party' && toTrack.energy > 70,
                 effects: ['crowd_cheer', 'applause', 'anthem_rise'],
                 duration: 5000,
                 success_message: 'Crowd erupted! Festival vibes unlocked!'
             },
             
-            // Smooth/feel-good techniques
-            'harmonic_flow': {
-                name: 'Harmonic Flow Transition',
-                description: 'Smooth harmonic transition',
-                condition: vibe.mood === 'uplifting' || vibe.primary_genre === 'feel-good',
-                effects: ['harmonic_rise', 'smooth_filter', 'musical_bridge'],
-                duration: 7000,
-                success_message: 'Buttery smooth transition! Perfect harmonic flow!'
-            },
-            
-            'vocal_drop_blend': {
-                name: 'Vocal Drop Blend',
-                description: 'Perfect vocal timing blend',
-                condition: vibe.primary_genre === 'feel-good' && energyChange < 10,
-                effects: ['vocal_drop', 'echo_tail', 'smooth_blend'],
+            'countdown_drop': {
+                name: 'Party Countdown Drop',
+                description: 'Classic party countdown into drop',
+                condition: vibe.mood === 'party' && energyChange > 15,
+                effects: ['countdown_vocal', 'crowd_anticipation', 'massive_drop'],
                 duration: 6000,
-                success_message: 'Vocal magic! Seamless blend achieved!'
+                success_message: '3...2...1...DROP! Party went NUCLEAR!'
             },
             
-            // Chill techniques
+            // CHILL & AMBIENT TECHNIQUES
             'ambient_fade_bridge': {
                 name: 'Ambient Fade Bridge',
                 description: 'Dreamy ambient transition',
@@ -856,19 +933,9 @@ class DJMEWv2 {
                 success_message: 'Ethereal transition! Perfect ambient flow!'
             },
             
-            // High BPM change techniques
-            'tempo_bridge_effect': {
-                name: 'Tempo Bridge Effect',
-                description: 'Bridging BPM gap with style',
-                condition: bpmChange > 20,
-                effects: ['tempo_shift', 'rhythm_break', 'sync_effect'],
-                duration: 8000,
-                success_message: 'Tempo bridge mastered! BPM transition perfected!'
-            },
-            
-            // Universal techniques
+            // UNIVERSAL LEGEND TECHNIQUES
             'psychic_crossfade': {
-                name: 'Psychic Crossfade',
+                name: 'MEW\'s Legendary Crossfade',
                 description: 'MEW\'s signature psychic blend',
                 condition: true, // Always available as fallback
                 effects: ['psychic_energy', 'crossfade_magic', 'mew_signature'],
@@ -913,17 +980,62 @@ class DJMEWv2 {
         this.animateCrossfader(1.0);
     }
 
-    // Activate specific transition effect visually
+    // Activate specific transition effect visually - LEGENDARY DJ EFFECTS!
     activateTransitionEffect(effect) {
-        // Map effects to visual elements
+        // Enhanced effect mapping for all DJ styles
         const effectMap = {
-            'air_horn': 'effect-filter',
+            // Hip-Hop & Rap Effects
+            'triple_air_horn': 'effect-filter',
+            'dj_khaled_vocal': 'effect-echo', 
+            'turntable_scratch': 'effect-reverb',
+            'vinyl_cut': 'effect-filter',
+            'scratch_blend': 'effect-reverb',
+            'rewind_sound': 'effect-drop',
+            'explosive_drop': 'effect-filter',
+            
+            // Trap & Modern Effects
+            'trap_buildup': 'effect-echo',
+            'bass_drop_impact': 'effect-drop',
+            'metro_boomin_tag': 'effect-filter',
+            'dj_mustard_tag': 'effect-echo',
+            
+            // Reggaeton & Latin Effects
+            'latin_air_horn': 'effect-filter',
+            'crowd_chant': 'effect-echo',
+            'perreo_buildup': 'effect-reverb',
+            'spanish_vocal_shout': 'effect-echo',
+            'party_whistle': 'effect-filter',
+            'latin_buildup': 'effect-reverb',
+            
+            // Electronic & Rave Effects
             'laser_sweep': 'effect-reverb',
+            'electronic_drop': 'effect-drop',
+            'rave_siren': 'effect-filter',
+            'euphoric_drop': 'effect-drop',
+            'whoosh': 'effect-reverb',
+            
+            // Pop & Mainstream Effects
+            'pop_drop': 'effect-drop',
+            'party_whistle': 'effect-filter',
+            
+            // Smooth & R&B Effects
+            'smooth_vocal': 'effect-echo',
+            'silk_transition': 'effect-reverb',
+            
+            // Crowd Interaction Effects
             'crowd_cheer': 'effect-echo',
-            'harmonic_rise': 'effect-filter',
+            'applause': 'effect-echo',
+            'countdown_vocal': 'effect-filter',
+            'crowd_anticipation': 'effect-echo',
+            'massive_drop': 'effect-drop',
+            'anthem_rise': 'effect-reverb',
+            
+            // Universal Effects
             'ambient_wash': 'effect-reverb',
             'tempo_shift': 'effect-drop',
-            'psychic_energy': 'effect-filter'
+            'psychic_energy': 'effect-filter',
+            'crossfade_magic': 'effect-reverb',
+            'mew_signature': 'effect-filter'
         };
         
         const elementId = effectMap[effect] || 'effect-filter';
@@ -936,26 +1048,69 @@ class DJMEWv2 {
             }, 2000);
         }
         
-        // Show effect name in notification
+        // Enhanced effect names with genre-specific styling
         const effectNames = {
-            'air_horn': '📯 AIR HORN!',
+            // Hip-Hop & Rap Effects
+            'triple_air_horn': '📯📯📯 TRIPLE AIR HORN!',
+            'dj_khaled_vocal': '🎤 WE THE BEST!',
+            'turntable_scratch': '🎛️ SCRATCH MASTER!',
+            'vinyl_cut': '💿 VINYL CUT!',
+            'scratch_blend': '🔄 SCRATCH BLEND!',
+            'rewind_sound': '⏪ REWIND!',
+            'explosive_drop': '💥 EXPLOSIVE DROP!',
+            
+            // Trap & Modern Effects  
+            'trap_buildup': '🔥 TRAP BUILDUP!',
+            'bass_drop_impact': '🔊 BASS DROP!',
+            'metro_boomin_tag': '🏷️ METRO BOOMIN!',
+            'dj_mustard_tag': '🟡 MUSTARD ON THE BEAT!',
+            
+            // Reggaeton & Latin Effects
+            'latin_air_horn': '📯 ¡DALE!',
+            'crowd_chant': '🗣️ ¡FIESTA!',
+            'perreo_buildup': '💃 PERREO TIME!',
+            'spanish_vocal_shout': '🎤 ¡FUEGO!',
+            'party_whistle': '🎵 PARTY WHISTLE!',
+            'latin_buildup': '🌶️ LATIN HEAT!',
+            
+            // Electronic & Rave Effects
             'laser_sweep': '🌟 LASER SWEEP!',
-            'crowd_cheer': '👥 CROWD CHEER!',
-            'harmonic_rise': '🎹 HARMONIC RISE!',
+            'electronic_drop': '⚡ ELECTRONIC DROP!',
+            'rave_siren': '🚨 RAVE SIREN!',
+            'euphoric_drop': '🌈 EUPHORIC DROP!',
+            'whoosh': '💨 WHOOSH!',
+            
+            // Pop & Mainstream Effects
+            'pop_drop': '🎉 POP DROP!',
+            
+            // Smooth & R&B Effects
+            'smooth_vocal': '🎙️ SMOOTH VOCALS!',
+            'silk_transition': '🪐 SILK TRANSITION!',
+            
+            // Crowd Interaction Effects
+            'crowd_cheer': '👥 CROWD GOES WILD!',
+            'applause': '👏 APPLAUSE!',
+            'countdown_vocal': '🔢 3...2...1...!',
+            'crowd_anticipation': '⏳ CROWD READY!',
+            'massive_drop': '💣 MASSIVE DROP!',
+            'anthem_rise': '📈 ANTHEM RISE!',
+            
+            // Universal Effects
             'ambient_wash': '🌊 AMBIENT WASH!',
             'tempo_shift': '⚡ TEMPO SHIFT!',
-            'psychic_energy': '🔮 PSYCHIC ENERGY!'
+            'psychic_energy': '🔮 PSYCHIC ENERGY!',
+            'crossfade_magic': '✨ CROSSFADE MAGIC!',
+            'mew_signature': '🐾 MEW SIGNATURE!'
         };
         
-        const notification = document.createElement('div');
-        notification.className = 'effect-popup';
-        notification.textContent = effectNames[effect] || '✨ EFFECT!';
-        notification.style.cssText = `
+        const effectName = effectNames[effect] || '✨ EFFECT!';
+        
+        // Genre-specific popup styling
+        let popupStyle = `
             position: fixed;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            background: linear-gradient(45deg, #8b5cf6, #a855f7);
             color: white;
             padding: 20px 40px;
             border-radius: 15px;
@@ -963,12 +1118,37 @@ class DJMEWv2 {
             font-size: 1.5rem;
             z-index: 1000;
             animation: effectPop 1.5s ease-out;
+            text-align: center;
         `;
+        
+        // Genre-specific colors
+        if (effect.includes('hip-hop') || effect.includes('rap') || effect.includes('scratch') || effect.includes('khaled')) {
+            popupStyle += 'background: linear-gradient(45deg, #ef4444, #dc2626);'; // Red for hip-hop
+        } else if (effect.includes('trap') || effect.includes('bass') || effect.includes('metro')) {
+            popupStyle += 'background: linear-gradient(45deg, #7c2d12, #a16207);'; // Dark orange for trap
+        } else if (effect.includes('latin') || effect.includes('reggaeton') || effect.includes('spanish')) {
+            popupStyle += 'background: linear-gradient(45deg, #dc2626, #ea580c);'; // Red-orange for Latin
+        } else if (effect.includes('electronic') || effect.includes('laser') || effect.includes('rave')) {
+            popupStyle += 'background: linear-gradient(45deg, #3b82f6, #1d4ed8);'; // Blue for electronic
+        } else if (effect.includes('pop')) {
+            popupStyle += 'background: linear-gradient(45deg, #ec4899, #be185d);'; // Pink for pop
+        } else if (effect.includes('smooth') || effect.includes('silk')) {
+            popupStyle += 'background: linear-gradient(45deg, #6b21a8, #7c2d12);'; // Purple-brown for R&B
+        } else {
+            popupStyle += 'background: linear-gradient(45deg, #8b5cf6, #a855f7);'; // Default psychic purple
+        }
+        
+        const notification = document.createElement('div');
+        notification.className = 'effect-popup';
+        notification.textContent = effectName;
+        notification.style.cssText = popupStyle;
         
         document.body.appendChild(notification);
         
         setTimeout(() => {
-            document.body.removeChild(notification);
+            if (document.body.contains(notification)) {
+                document.body.removeChild(notification);
+            }
         }, 1500);
     }
 

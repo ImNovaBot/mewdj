@@ -321,22 +321,62 @@ class DJIntelligence {
         const avgValence = totalValence / queue.length;
         const avgDanceability = totalDanceability / queue.length;
 
-        // Determine primary vibe
+        // Enhanced genre detection for all party types
         let primaryGenre = 'electronic';
         let mood = 'neutral';
         
-        if (avgEnergy > 0.8 && avgDanceability > 0.7) {
-            primaryGenre = 'high-energy-dance';
-            mood = 'party';
-        } else if (avgEnergy > 0.6 && avgBPM > 120) {
-            primaryGenre = 'electronic';
-            mood = 'energetic';
-        } else if (avgValence > 0.6 && avgEnergy < 0.6) {
-            primaryGenre = 'feel-good';
-            mood = 'uplifting';
-        } else if (avgEnergy < 0.4) {
-            primaryGenre = 'chill';
-            mood = 'relaxed';
+        // Analyze track names and artists for genre hints
+        const trackText = queue.map(track => 
+            `${track.name || ''} ${track.artist || ''}`.toLowerCase()
+        ).join(' ');
+        
+        const genreKeywords = {
+            'hip-hop': ['hip hop', 'rap', 'drake', 'kendrick', 'cole', 'future', 'travis scott', 'kanye'],
+            'trap': ['trap', 'migos', 'lil', 'young', 'savage', 'metro boomin', '21 savage'],
+            'reggaeton': ['reggaeton', 'bad bunny', 'ozuna', 'maluma', 'j balvin', 'daddy yankee'],
+            'latin': ['latin', 'salsa', 'bachata', 'merengue', 'latino', 'spanish'],
+            'pop': ['pop', 'taylor swift', 'ariana', 'dua lipa', 'billie eilish', 'weeknd'],
+            'r&b': ['r&b', 'rnb', 'soul', 'neo soul', 'sza', 'frank ocean', 'the weeknd']
+        };
+        
+        // Check for genre keywords first
+        for (const [genre, keywords] of Object.entries(genreKeywords)) {
+            if (keywords.some(keyword => trackText.includes(keyword))) {
+                primaryGenre = genre;
+                break;
+            }
+        }
+        
+        // Fallback to audio feature analysis
+        if (primaryGenre === 'electronic') {
+            if (avgEnergy > 0.8 && avgDanceability > 0.7 && avgBPM > 125) {
+                primaryGenre = 'high-energy-dance';
+                mood = 'party';
+            } else if (avgEnergy > 0.7 && avgBPM >= 140 && avgBPM <= 180) {
+                primaryGenre = 'electronic';
+                mood = 'rave';
+            } else if (avgEnergy > 0.6 && avgBPM >= 70 && avgBPM <= 90) {
+                primaryGenre = 'hip-hop'; // Hip-hop BPM range
+                mood = 'party';
+            } else if (avgEnergy > 0.6 && avgBPM > 120) {
+                primaryGenre = 'electronic';
+                mood = 'energetic';
+            } else if (avgValence > 0.6 && avgEnergy < 0.6) {
+                primaryGenre = 'feel-good';
+                mood = 'uplifting';
+            } else if (avgEnergy < 0.4) {
+                primaryGenre = 'chill';
+                mood = 'relaxed';
+            }
+        } else {
+            // Set mood based on detected genre
+            if (primaryGenre === 'hip-hop' || primaryGenre === 'trap' || primaryGenre === 'reggaeton') {
+                mood = avgEnergy > 0.6 ? 'party' : 'chill';
+            } else if (primaryGenre === 'pop' || primaryGenre === 'latin') {
+                mood = 'uplifting';
+            } else if (primaryGenre === 'r&b') {
+                mood = 'smooth';
+            }
         }
 
         // Analyze energy trend
@@ -370,29 +410,42 @@ class DJIntelligence {
     static generateVibeRecommendations(genre, mood, trend, avgBPM) {
         const recommendations = [];
 
-        // Genre-specific song suggestions
+        // Expanded genre-specific song suggestions for all party types
         const genreQueries = {
-            'high-energy-dance': ['festival electronic', 'EDM bangers', 'dance hits', 'club music'],
-            'electronic': ['electronic music', 'house music', 'techno', 'synth pop'],
-            'feel-good': ['feel good music', 'happy songs', 'uplifting tracks', 'positive vibes'],
-            'chill': ['chill music', 'ambient electronic', 'downtempo', 'relaxing tracks']
+            'high-energy-dance': ['festival EDM bangers', 'club dance hits', 'rave anthems', 'electronic festival'],
+            'electronic': ['house music hits', 'techno classics', 'synth pop bangers', 'electronic dance'],
+            'hip-hop': ['hip hop party songs', 'rap bangers', 'hip hop club hits', 'trap music'],
+            'rap': ['rap party anthems', 'hip hop club bangers', 'gangsta rap classics', 'rap hits'],
+            'trap': ['trap bangers', 'dirty south hip hop', 'trap party music', 'bass heavy trap'],
+            'reggaeton': ['reggaeton hits', 'latin party music', 'perreo classics', 'reggaeton club'],
+            'pop': ['pop party hits', 'mainstream bangers', 'top 40 dance', 'pop club hits'],
+            'feel-good': ['feel good party', 'uplifting dance', 'positive energy hits', 'good vibes music'],
+            'chill': ['chill vibes', 'laid back hip hop', 'smooth R&B', 'relaxed party music'],
+            'latin': ['latin party hits', 'salsa club music', 'bachata party', 'latin dance']
         };
 
-        // Energy trend adjustments
+        // Energy trend adjustments with genre awareness
         if (trend === 'building') {
-            recommendations.push({
-                query: `high energy ${genre} ${Math.round(avgBPM + 10)} bpm`,
-                reason: 'Building energy - need higher BPM tracks'
-            });
+            if (genre.includes('hip-hop') || genre.includes('rap')) {
+                recommendations.push({
+                    query: `high energy rap bangers ${Math.round(avgBPM + 5)} bpm`,
+                    reason: 'Building rap energy - need harder hitting tracks'
+                });
+            } else {
+                recommendations.push({
+                    query: `high energy ${genre} ${Math.round(avgBPM + 10)} bpm`,
+                    reason: 'Building energy - need higher BPM tracks'
+                });
+            }
         } else if (trend === 'cooling') {
             recommendations.push({
-                query: `mellow ${genre} ${Math.round(avgBPM - 5)} bpm`,
-                reason: 'Cooling down - need lower energy tracks'
+                query: `smooth ${genre} ${Math.round(avgBPM - 5)} bpm`,
+                reason: 'Cooling down - need mellower tracks'
             });
         } else {
             recommendations.push({
-                query: genreQueries[genre]?.[0] || 'electronic music',
-                reason: `Maintaining ${mood} vibe`
+                query: genreQueries[genre]?.[0] || 'party music',
+                reason: `Maintaining ${mood} ${genre} vibe`
             });
         }
 
@@ -1466,31 +1519,73 @@ class AutonomousDJ {
     static generateSmartSearchQueries(vibe) {
         const queries = [];
         
-        // Base genre queries
+        // Expanded base genre queries for LEGENDARY party vibes
         const genreQueries = {
             'high-energy-dance': [
                 'festival EDM bangers',
-                'high energy electronic dance',
-                'club hits electronic',
-                'dance music energy'
+                'club dance anthems',
+                'electronic party hits',
+                'rave festival music'
             ],
             'electronic': [
-                'electronic music hits',
-                'synth pop electronic',
-                'house music tracks',
-                'electronic beats'
+                'house music bangers',
+                'techno club hits',
+                'electronic dance hits',
+                'synth pop party'
+            ],
+            'hip-hop': [
+                'hip hop party bangers',
+                'rap club hits',
+                'hip hop dance tracks',
+                'party rap anthems'
+            ],
+            'rap': [
+                'rap bangers',
+                'hardcore rap hits',
+                'gangsta rap classics',
+                'rap party songs'
+            ],
+            'trap': [
+                'trap bangers',
+                'hard trap beats',
+                'southern hip hop',
+                'trap party music'
+            ],
+            'reggaeton': [
+                'reggaeton hits',
+                'latin party music',
+                'perreo classics',
+                'reggaeton club bangers'
+            ],
+            'latin': [
+                'latin party hits',
+                'salsa dance music',
+                'bachata party',
+                'latin dance tracks'
+            ],
+            'pop': [
+                'pop party hits',
+                'mainstream dance',
+                'top 40 bangers',
+                'radio party hits'
+            ],
+            'r&b': [
+                'r&b party songs',
+                'neo soul hits',
+                'smooth r&b',
+                'r&b club tracks'
             ],
             'feel-good': [
-                'feel good music happy',
-                'uplifting positive songs',
-                'happy electronic music',
-                'good vibes music'
+                'feel good party',
+                'uplifting dance hits',
+                'positive energy music',
+                'good vibes party'
             ],
             'chill': [
-                'chill electronic ambient',
-                'downtempo relaxing music',
-                'ambient electronic chill',
-                'mellow electronic'
+                'chill party vibes',
+                'laid back hip hop',
+                'smooth party music',
+                'relaxed club music'
             ]
         };
 
@@ -1531,27 +1626,33 @@ class AutonomousDJ {
     static scoreTrackForVibe(track, vibe) {
         let score = 50; // Base score
         
-        // This is a simplified scoring - in reality we'd need audio features
-        // For now, use track name/artist heuristics
-        
         const trackName = (track.name || '').toLowerCase();
         const artistName = (track.artist || '').toLowerCase();
         const combined = `${trackName} ${artistName}`;
         
-        // Genre matching keywords
+        // Expanded genre matching keywords for all party types
         const genreKeywords = {
-            'high-energy-dance': ['dance', 'remix', 'festival', 'club', 'energy', 'party'],
-            'electronic': ['electronic', 'synth', 'house', 'techno', 'beat', 'mix'],
-            'feel-good': ['happy', 'good', 'love', 'feel', 'positive', 'up'],
-            'chill': ['chill', 'ambient', 'mellow', 'soft', 'calm', 'relax']
+            'high-energy-dance': ['dance', 'remix', 'festival', 'club', 'energy', 'party', 'banger', 'anthem'],
+            'electronic': ['electronic', 'synth', 'house', 'techno', 'beat', 'mix', 'edm', 'rave'],
+            'hip-hop': ['hip hop', 'rap', 'freestyle', 'cipher', 'bars', 'flow', 'beats', 'mixtape'],
+            'rap': ['rap', 'rapper', 'spitter', 'lyrical', 'bars', 'verse', 'hook', 'banger'],
+            'trap': ['trap', 'drill', 'mumble', 'auto-tune', 'adlibs', 'sauce', 'slaps', 'goes hard'],
+            'reggaeton': ['reggaeton', 'perreo', 'dembow', 'latino', 'urbano', 'fiesta', 'party'],
+            'latin': ['latin', 'latino', 'spanish', 'salsa', 'bachata', 'merengue', 'cumbia'],
+            'pop': ['pop', 'mainstream', 'radio', 'hit', 'single', 'chart', 'billboard'],
+            'r&b': ['r&b', 'rnb', 'soul', 'smooth', 'vocals', 'melody', 'groove'],
+            'feel-good': ['happy', 'good', 'love', 'feel', 'positive', 'up', 'vibes', 'mood'],
+            'chill': ['chill', 'ambient', 'mellow', 'soft', 'calm', 'relax', 'laid back']
         };
 
-        // Mood matching keywords
+        // Enhanced mood matching keywords
         const moodKeywords = {
-            'party': ['party', 'dance', 'club', 'wild', 'crazy'],
-            'energetic': ['energy', 'power', 'intense', 'strong'],
-            'uplifting': ['up', 'rise', 'lift', 'high', 'bright'],
-            'relaxed': ['calm', 'peace', 'soft', 'gentle', 'quiet']
+            'party': ['party', 'club', 'wild', 'crazy', 'lit', 'fire', 'banger', 'slaps', 'goes hard'],
+            'rave': ['rave', 'festival', 'drop', 'bass', 'build', 'euphoria', 'energy', 'insane'],
+            'energetic': ['energy', 'power', 'intense', 'strong', 'hype', 'pump', 'adrenaline'],
+            'uplifting': ['up', 'rise', 'lift', 'high', 'bright', 'positive', 'good vibes'],
+            'smooth': ['smooth', 'silk', 'butter', 'flow', 'groove', 'vibe', 'chill'],
+            'relaxed': ['calm', 'peace', 'soft', 'gentle', 'quiet', 'mellow', 'laid back']
         };
 
         // Score based on genre match
@@ -1566,14 +1667,56 @@ class AutonomousDJ {
             if (combined.includes(keyword)) score += 10;
         });
 
-        // Bonus for popular artists in genre
-        if (vibe.primary_genre === 'electronic') {
-            const electronicArtists = ['avicii', 'calvin harris', 'deadmau5', 'skrillex', 'martin garrix'];
-            electronicArtists.forEach(artist => {
-                if (artistName.includes(artist)) score += 20;
-            });
-        }
+        // Legendary artist bonuses by genre
+        const legendaryArtists = {
+            'hip-hop': [
+                'kendrick lamar', 'j cole', 'drake', 'kanye', 'jay-z', 'nas', 'eminem', 'tupac', 
+                'biggie', 'ice cube', 'snoop dogg', 'dr dre', 'outkast', 'wu-tang', 'rakim'
+            ],
+            'rap': [
+                'kendrick', 'cole', 'drake', 'travis scott', 'future', 'lil wayne', 'nicki minaj',
+                'cardi b', 'megan thee stallion', 'dababy', 'roddy ricch', 'polo g'
+            ],
+            'trap': [
+                'migos', 'future', 'travis scott', '21 savage', 'lil baby', 'gunna', 'young thug',
+                'metro boomin', 'southside', 'zaytoven', 'lex luger', 'pierre bourne'
+            ],
+            'reggaeton': [
+                'bad bunny', 'ozuna', 'maluma', 'j balvin', 'daddy yankee', 'don omar', 
+                'wisin y yandel', 'nicky jam', 'farruko', 'anuel aa', 'karol g'
+            ],
+            'electronic': [
+                'avicii', 'calvin harris', 'deadmau5', 'skrillex', 'martin garrix', 'tiësto',
+                'david guetta', 'diplo', 'zedd', 'marshmello', 'chainsmokers', 'swedish house mafia'
+            ],
+            'pop': [
+                'taylor swift', 'ariana grande', 'dua lipa', 'billie eilish', 'the weeknd',
+                'bruno mars', 'ed sheeran', 'justin bieber', 'olivia rodrigo', 'doja cat'
+            ],
+            'r&b': [
+                'the weeknd', 'sza', 'frank ocean', 'daniel caesar', 'bryson tiller',
+                'summer walker', 'jhené aiko', 'miguel', 'usher', 'chris brown'
+            ]
+        };
 
+        // Apply legendary artist bonus
+        const artistsForGenre = legendaryArtists[vibe.primary_genre] || [];
+        artistsForGenre.forEach(artist => {
+            if (artistName.includes(artist) || combined.includes(artist)) {
+                score += 25; // Big bonus for legendary artists
+            }
+        });
+
+        // Special party keywords get extra points
+        const partyKeywords = ['banger', 'slaps', 'goes hard', 'fire', 'lit', 'anthem', 'club', 'party'];
+        partyKeywords.forEach(keyword => {
+            if (combined.includes(keyword)) score += 12;
+        });
+
+        // Energy-based adjustments
+        if (vibe.mood === 'party' && combined.includes('energy')) score += 15;
+        if (vibe.mood === 'rave' && (combined.includes('drop') || combined.includes('bass'))) score += 20;
+        
         return Math.min(100, score); // Cap at 100
     }
 
