@@ -1,242 +1,516 @@
-class AIdjPro {
+// DJ MEW v2.0 - Smart Queue Master
+// Focus: Reliability, Music Intelligence, Perfect Flow
+
+class DJMEWv2 {
     constructor() {
         this.ws = null;
-        this.isConnected = false;
-        this.currentTrack = null;
-        this.nextTrack = null;
-        this.queue = [];
-        this.isPlaying = false;
-        this.usageStats = {
-            claudeTokens: 0,
-            spotifyAPICalls: 0,
-            renderHours: 0,
-            sessionStart: Date.now()
+        this.state = {
+            isPlaying: false,
+            currentTrack: null,
+            queue: [],
+            connected: false
         };
+        this.stats = {};
+        this.searchResults = [];
+        this.searchTimeout = null;
         
-        // Web Audio mixing
-        this.audioContext = null;
-        this.player = null;
-        this.deviceId = null;
-        this.currentSource = null;
-        this.nextSource = null;
-        this.crossfader = 0.5;
-        this.autoMixEnabled = true;
-        this.mixingInProgress = false;
-        
-        // Effects
-        this.effects = {
-            reverb: null,
-            filter: null,
-            echo: null,
-            masterGain: null
-        };
-        
-        console.log('🎵 DJ MEW initializing...');
-        this.initWebSocket();
-        this.initEventListeners();
-        console.log('🔍 About to check auth status...');
-        this.checkAuthStatus();
-        this.initResourceMonitoring();
-        this.initWebAudio();
-        this.initSpotifyPlayer();
+        console.log('🎵 DJ MEW v2.0 - Smart Queue Master initializing...');
+        this.init();
     }
 
+    init() {
+        this.initWebSocket();
+        this.initEventListeners();
+        this.checkAuthStatus();
+        this.fetchStats();
+        
+        // Initialize Spotify Web Playbook SDK if available
+        window.onSpotifyWebPlaybackSDKReady = () => {
+            this.initSpotifyPlayer();
+        };
+    }
+
+    // WebSocket Connection - Simple and Reliable
     initWebSocket() {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const wsUrl = `${protocol}//${window.location.host}`;
         
-        this.ws = new WebSocket(wsUrl);
-        
-        this.ws.onopen = () => {
-            console.log('🎧 Connected to AI DJ Server');
-            this.updateConnectionStatus(true);
-        };
-        
-        this.ws.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-            this.handleServerMessage(data);
-        };
-        
-        this.ws.onclose = () => {
-            console.log('🔌 Disconnected from server');
-            this.updateConnectionStatus(false);
-            // Reconnect after 3 seconds
-            setTimeout(() => this.initWebSocket(), 3000);
-        };
-        
-        this.ws.onerror = (error) => {
-            console.error('WebSocket error:', error);
-        };
+        try {
+            this.ws = new WebSocket(wsUrl);
+            
+            this.ws.onopen = () => {
+                console.log('🔗 Connected to DJ MEW server');
+                this.updateConnectionStatus(true);
+            };
+
+            this.ws.onmessage = (event) => {
+                const message = JSON.parse(event.data);
+                this.handleWebSocketMessage(message);
+            };
+
+            this.ws.onclose = () => {
+                console.log('🔌 Disconnected from server');
+                this.updateConnectionStatus(false);
+                // Reconnect after 3 seconds
+                setTimeout(() => this.initWebSocket(), 3000);
+            };
+
+            this.ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+            };
+        } catch (error) {
+            console.error('Failed to connect WebSocket:', error);
+        }
     }
 
-    handleServerMessage(data) {
-        switch (data.type) {
+    handleWebSocketMessage(message) {
+        console.log('📨 Received:', message.type);
+        
+        switch (message.type) {
             case 'state-update':
-                this.updateDJState(data);
+                this.state = { ...this.state, ...message.state };
+                this.stats = message.stats || this.stats;
+                this.updateUI();
                 break;
                 
-            case 'queue-updated':
-                this.updateQueue(data.queue);
+            case 'queue-update':
+                this.state.queue = message.queue;
+                this.renderQueue();
                 break;
                 
-            case 'song-queued':
-                this.showNotification(`🎵 ${data.message}`);
+            case 'queue-optimized':
+                this.state.queue = message.queue;
+                this.renderQueue();
+                this.showNotification('🧠 MEW optimized your queue for perfect flow!');
+                break;
+                
+            case 'playback-update':
+                this.state.isPlaying = message.isPlaying;
+                this.updatePlaybackControls();
                 break;
                 
             case 'track-changed':
-                this.updateCurrentTrack(data.track);
-                break;
-                
-            case 'mix-transition':
-                this.showMixTransition(data);
-                break;
-                
-            case 'ai-insight':
-                this.updateAIInsights(data);
-                break;
-                
-            case 'spotify-refreshed':
-                this.updateSpotifyStatus(true, data.userInfo);
-                this.showNotification('✨ Spotify connection refreshed');
-                break;
-                
-            case 'spotify-disconnected':
-                this.updateSpotifyStatus(false);
-                this.showNotification('👋 Disconnected from Spotify');
-                break;
-                
-            case 'usage-update':
-                this.usageStats = { ...this.usageStats, ...data.stats };
-                this.updateResourceDashboard();
-                break;
-                
-            case 'spotify-token-expired':
-                this.handleTokenExpiry(data.message);
+                this.state.currentTrack = message.track;
+                this.updateNowPlaying();
                 break;
                 
             case 'error':
-                this.showNotification(`❌ ${data.message}`, 'error');
+                this.showNotification(message.message, 'error');
                 break;
         }
     }
 
+    // Event Listeners
     initEventListeners() {
-        // Playback controls
-        document.getElementById('play-btn').addEventListener('click', () => {
-            this.sendCommand('play');
-        });
-        
-        document.getElementById('pause-btn').addEventListener('click', () => {
-            this.sendCommand('pause');
-        });
-        
-        document.getElementById('next-btn').addEventListener('click', () => {
-            this.sendCommand('next');
-        });
-        
-        document.getElementById('mix-btn').addEventListener('click', () => {
-            this.showNotification('🔮 MEW is always in control! Legendary mixing is automatic.');
-        });
-
         // Search functionality
-        this.initSearchFeatures();
-
-        // Crossfader (automatic, but show feedback)
-        document.getElementById('crossfader').addEventListener('input', (e) => {
-            this.showNotification('🔮 MEW controls the crossfader with psychic precision!');
-            // Reset to center since MEW controls it
-            setTimeout(() => {
-                e.target.value = 50;
-            }, 1000);
-        });
-
-        // Song requests
-        document.getElementById('request-btn').addEventListener('click', () => {
-            this.submitSongRequest();
-        });
+        const searchInput = document.getElementById('song-search');
+        const searchBtn = document.getElementById('search-btn');
         
-        document.getElementById('song-request').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                this.submitSongRequest();
-            }
-        });
-
-        // Smart suggestions
-        document.querySelectorAll('.suggestion-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                this.submitSongRequest(btn.dataset.request);
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+                clearTimeout(this.searchTimeout);
+                this.searchTimeout = setTimeout(() => {
+                    if (e.target.value.length > 2) {
+                        this.searchTracks(e.target.value);
+                    } else {
+                        this.clearSearchResults();
+                    }
+                }, 300);
             });
-        });
-
-        // Queue controls
-        document.getElementById('clear-queue').addEventListener('click', () => {
-            this.clearQueue();
-        });
-        
-        document.getElementById('shuffle-queue').addEventListener('click', () => {
-            this.shuffleQueue();
-        });
-
-        // AI controls
-        document.getElementById('ai-suggest').addEventListener('click', () => {
-            this.getAISuggestion();
-        });
-
-        // Manual add song
-        document.getElementById('manual-add-btn').addEventListener('click', () => {
-            this.showManualAddDialog();
-        });
-
-        // Smart queue
-        document.getElementById('smart-queue-btn').addEventListener('click', () => {
-            this.generateSmartQueue();
-        });
-    }
-
-    sendCommand(command, data = {}) {
-        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-            this.ws.send(JSON.stringify({
-                type: command,
-                ...data
-            }));
         }
+
+        // Playback controls
+        document.getElementById('play-btn')?.addEventListener('click', () => this.play());
+        document.getElementById('pause-btn')?.addEventListener('click', () => this.pause());
+        document.getElementById('next-btn')?.addEventListener('click', () => this.nextTrack());
+        
+        // Queue controls
+        document.getElementById('optimize-queue-btn')?.addEventListener('click', () => this.optimizeQueue());
+        document.getElementById('clear-queue-btn')?.addEventListener('click', () => this.clearQueue());
+        
+        // Refresh stats periodically
+        setInterval(() => this.fetchStats(), 30000); // Every 30 seconds
     }
 
+    // Authentication Check
     checkAuthStatus() {
         const urlParams = new URLSearchParams(window.location.search);
-        console.log('🔍 Checking auth status, URL params:', Object.fromEntries(urlParams));
         
         if (urlParams.get('authenticated') === 'true') {
-            console.log('✅ Authentication detected in URL');
-            this.hideConnectionPanel();
+            console.log('✅ Spotify authentication detected');
             
-            // Parse user info if available
             const userParam = urlParams.get('user');
-            let userInfo = null;
             if (userParam) {
                 try {
-                    console.log('📊 Raw user param:', userParam);
-                    userInfo = JSON.parse(decodeURIComponent(userParam));
-                    console.log('👤 Parsed user info:', userInfo);
+                    const userInfo = JSON.parse(decodeURIComponent(userParam));
+                    this.updateSpotifyStatus(true, userInfo);
                 } catch (e) {
                     console.error('Failed to parse user info:', e);
                 }
             }
             
-            this.updateSpotifyStatus(true, userInfo);
-            this.showNotification(`🐾 Welcome to DJ MEW${userInfo?.display_name ? ', ' + userInfo.display_name : ''}!`);
+            this.hideConnectionPanel();
+            this.showNotification('🎵 Connected to Spotify! Ready to build smart queues.');
             
-            // Clear URL params after a delay to allow processing
+            // Clear URL parameters
             setTimeout(() => {
                 window.history.replaceState({}, document.title, window.location.pathname);
             }, 1000);
             
-            console.log('🎵 Spotify authentication complete!');
         } else if (urlParams.get('error')) {
-            console.error('❌ Authentication error in URL');
             this.showNotification('❌ Spotify connection failed', 'error');
+        }
+    }
+
+    // Search Functionality
+    async searchTracks(query) {
+        try {
+            console.log('🔍 Searching for:', query);
+            
+            const response = await fetch('/api/search', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ query, limit: 10 })
+            });
+
+            if (!response.ok) {
+                throw new Error(`Search failed: ${response.status}`);
+            }
+
+            const results = await response.json();
+            this.searchResults = results;
+            this.renderSearchResults();
+            
+        } catch (error) {
+            console.error('Search error:', error);
+            this.showNotification('Search failed: ' + error.message, 'error');
+        }
+    }
+
+    renderSearchResults() {
+        const container = document.getElementById('search-results');
+        if (!container) return;
+
+        if (this.searchResults.length === 0) {
+            container.innerHTML = '<p class="no-results">No results found</p>';
+            return;
+        }
+
+        container.innerHTML = this.searchResults.map(track => `
+            <div class="search-result" data-track-id="${track.id}">
+                <img src="${track.image || '/placeholder-album.png'}" alt="${track.name}" class="track-image">
+                <div class="track-info">
+                    <h4>${track.name}</h4>
+                    <p>${track.artist} • ${track.album}</p>
+                </div>
+                <button class="add-btn" onclick="aidj.addToQueue('${track.id}')">
+                    ➕ Add to Queue
+                </button>
+            </div>
+        `).join('');
+    }
+
+    clearSearchResults() {
+        const container = document.getElementById('search-results');
+        if (container) {
+            container.innerHTML = '';
+        }
+    }
+
+    // Queue Management - The Smart Part!
+    async addToQueue(trackId) {
+        try {
+            const track = this.searchResults.find(t => t.id === trackId);
+            if (!track) {
+                throw new Error('Track not found');
+            }
+
+            console.log('➕ Adding to queue:', track.name);
+            
+            const response = await fetch('/api/add-to-queue', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ track })
+            });
+
+            if (!response.ok) {
+                throw new Error(`Failed to add to queue: ${response.status}`);
+            }
+
+            const result = await response.json();
+            
+            this.showNotification(`✅ Added "${track.name}" to queue (${result.item.bpm} BPM, ${result.item.key} key)`);
+            
+            // Clear search after adding
+            document.getElementById('song-search').value = '';
+            this.clearSearchResults();
+            
+        } catch (error) {
+            console.error('Add to queue error:', error);
+            this.showNotification('Failed to add song: ' + error.message, 'error');
+        }
+    }
+
+    async optimizeQueue() {
+        try {
+            if (this.state.queue.length <= 1) {
+                this.showNotification('Need at least 2 songs to optimize queue');
+                return;
+            }
+
+            console.log('🧠 Requesting queue optimization...');
+            
+            const response = await fetch('/api/optimize-queue', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`Optimization failed: ${response.status}`);
+            }
+
+            const result = await response.json();
+            console.log('✨ Queue optimization result:', result.message);
+            
+        } catch (error) {
+            console.error('Queue optimization error:', error);
+            this.showNotification('Failed to optimize queue: ' + error.message, 'error');
+        }
+    }
+
+    async clearQueue() {
+        try {
+            const response = await fetch('/api/clear-queue', {
+                method: 'POST'
+            });
+
+            if (response.ok) {
+                this.showNotification('🗑️ Queue cleared');
+            }
+        } catch (error) {
+            console.error('Clear queue error:', error);
+        }
+    }
+
+    // Queue Rendering with Smart Analysis
+    renderQueue() {
+        const container = document.getElementById('queue-list');
+        if (!container) return;
+
+        if (this.state.queue.length === 0) {
+            container.innerHTML = '<p class="empty-queue">Queue is empty - add some songs!</p>';
+            return;
+        }
+
+        container.innerHTML = this.state.queue.map((track, index) => {
+            const compatibility = this.getCompatibilityScore(index);
+            
+            return `
+                <div class="queue-item" data-index="${index}">
+                    <div class="queue-number">${index + 1}</div>
+                    <img src="${track.image || '/placeholder-album.png'}" alt="${track.name}" class="queue-track-image">
+                    
+                    <div class="queue-track-info">
+                        <h4>${track.name}</h4>
+                        <p>${track.artist}</p>
+                    </div>
+                    
+                    <div class="track-analysis">
+                        <div class="analysis-item">
+                            <span class="bpm-badge" style="background-color: ${this.getBPMColor(track.bpm)}">
+                                ${track.bpm} BPM
+                            </span>
+                        </div>
+                        <div class="analysis-item">
+                            <span class="key-badge">${track.key}</span>
+                        </div>
+                        <div class="analysis-item">
+                            <span class="energy-badge">⚡ ${track.energy}%</span>
+                        </div>
+                    </div>
+                    
+                    ${compatibility ? `
+                        <div class="compatibility-score">
+                            <div class="compatibility-bar">
+                                <div class="compatibility-fill" style="width: ${compatibility}%"></div>
+                            </div>
+                            <span class="compatibility-text">${compatibility}% flow</span>
+                        </div>
+                    ` : ''}
+                    
+                    <button class="remove-btn" onclick="aidj.removeFromQueue(${index})">❌</button>
+                </div>
+            `;
+        }).join('');
+        
+        // Update queue stats
+        this.updateQueueStats();
+    }
+
+    getCompatibilityScore(index) {
+        if (index === 0 || !this.state.queue[index - 1]) return null;
+        
+        const current = this.state.queue[index];
+        const previous = this.state.queue[index - 1];
+        
+        if (!current.analysis || !previous.analysis) return null;
+        
+        // Simplified compatibility calculation
+        let score = 0;
+        
+        // BPM compatibility
+        const bpmDiff = Math.abs(current.analysis.tempo - previous.analysis.tempo);
+        const bpmScore = Math.max(0, 100 - (bpmDiff / 2));
+        score += bpmScore * 0.4;
+        
+        // Energy flow
+        const energyDiff = Math.abs(current.analysis.energy - previous.analysis.energy);
+        const energyScore = Math.max(0, 100 - (energyDiff * 100));
+        score += energyScore * 0.3;
+        
+        // Key compatibility (simplified)
+        const keyScore = this.getKeyCompatibility(current.analysis.key, previous.analysis.key);
+        score += keyScore * 0.3;
+        
+        return Math.round(score);
+    }
+
+    getKeyCompatibility(key1, key2) {
+        // Simplified key compatibility
+        if (key1 === key2) return 100;
+        
+        // Adjacent keys in circle of fifths
+        const adjacentKeys = {
+            0: [7, 5], 1: [8, 6], 2: [9, 7], 3: [10, 8], 4: [11, 9], 5: [0, 10],
+            6: [1, 11], 7: [2, 0], 8: [3, 1], 9: [4, 2], 10: [5, 3], 11: [6, 4]
+        };
+        
+        if (adjacentKeys[key1]?.includes(key2)) return 80;
+        
+        return 50; // Default compatibility
+    }
+
+    getBPMColor(bpm) {
+        if (bpm < 100) return '#64b5f6'; // Blue - Slow
+        if (bpm < 120) return '#81c784'; // Green - Medium  
+        if (bpm < 140) return '#ffb74d'; // Orange - Fast
+        return '#f06292'; // Pink - Very Fast
+    }
+
+    removeFromQueue(index) {
+        this.state.queue.splice(index, 1);
+        this.renderQueue();
+        
+        // Send update to server
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify({
+                type: 'queue-update',
+                queue: this.state.queue
+            }));
+        }
+    }
+
+    updateQueueStats() {
+        const statsEl = document.getElementById('queue-stats');
+        if (!statsEl || this.state.queue.length === 0) return;
+        
+        const avgBPM = Math.round(
+            this.state.queue.reduce((sum, track) => sum + track.bpm, 0) / this.state.queue.length
+        );
+        
+        const avgEnergy = Math.round(
+            this.state.queue.reduce((sum, track) => sum + track.energy, 0) / this.state.queue.length  
+        );
+        
+        const totalDuration = this.state.queue.reduce((sum, track) => sum + track.duration, 0);
+        const minutes = Math.floor(totalDuration / 60000);
+        
+        statsEl.innerHTML = `
+            <div class="queue-stat">📊 ${this.state.queue.length} songs</div>
+            <div class="queue-stat">⏱️ ${minutes} min</div>
+            <div class="queue-stat">🎵 ${avgBPM} avg BPM</div>
+            <div class="queue-stat">⚡ ${avgEnergy}% avg energy</div>
+        `;
+    }
+
+    // Playback Controls
+    play() {
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify({ type: 'play' }));
+        }
+    }
+
+    pause() {
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify({ type: 'pause' }));
+        }
+    }
+
+    nextTrack() {
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify({ type: 'next' }));
+        }
+    }
+
+    // UI Updates
+    updatePlaybackControls() {
+        const playBtn = document.getElementById('play-btn');
+        const pauseBtn = document.getElementById('pause-btn');
+        
+        if (this.state.isPlaying) {
+            playBtn?.classList.remove('active');
+            pauseBtn?.classList.add('active');
         } else {
-            console.log('ℹ️ No authentication parameters in URL');
+            playBtn?.classList.add('active');  
+            pauseBtn?.classList.remove('active');
+        }
+    }
+
+    updateNowPlaying() {
+        const track = this.state.currentTrack;
+        
+        if (track) {
+            document.getElementById('current-title').textContent = track.name;
+            document.getElementById('current-artist').textContent = track.artist;
+            document.getElementById('current-artwork').src = track.image || '/placeholder-album.png';
+            
+            if (track.analysis) {
+                document.getElementById('current-bpm').textContent = Math.round(track.analysis.tempo);
+                document.getElementById('current-key').textContent = this.getKeyName(track.analysis.key);
+                document.getElementById('current-energy').textContent = Math.round(track.analysis.energy * 100) + '%';
+            }
+        }
+    }
+
+    getKeyName(key) {
+        const keys = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
+        return keys[key] || '?';
+    }
+
+    updateSpotifyStatus(connected, userInfo = null) {
+        const statusEl = document.getElementById('spotify-status');
+        
+        if (connected && userInfo) {
+            statusEl.innerHTML = `✅ Connected as ${userInfo.display_name}`;
+            statusEl.style.color = '#1db954';
+        } else {
+            statusEl.innerHTML = '❌ Not Connected';
+            statusEl.style.color = '#ef4444';
+        }
+    }
+
+    updateConnectionStatus(connected) {
+        this.state.connected = connected;
+        const indicator = document.getElementById('connection-indicator');
+        if (indicator) {
+            indicator.classList.toggle('connected', connected);
+            indicator.textContent = connected ? '🟢 Connected' : '🔴 Disconnected';
         }
     }
 
@@ -244,1203 +518,114 @@ class AIdjPro {
         const panel = document.getElementById('connection-panel');
         if (panel) {
             panel.style.display = 'none';
-            console.log('🚪 Connection panel hidden');
-        } else {
-            console.error('❌ Connection panel element not found');
         }
     }
 
-    updateConnectionStatus(connected) {
-        this.isConnected = connected;
-        // Update UI connection indicators
-    }
-
-    updateSpotifyStatus(connected, userInfo = null) {
-        const statusEl = document.getElementById('spotify-status');
-        console.log('🔄 Updating Spotify status:', { connected, userInfo: userInfo ? 'present' : 'null' });
-        
-        if (!statusEl) {
-            console.error('❌ Spotify status element not found');
-            return;
-        }
-        
-        if (connected) {
-            console.log('✅ Setting connected status');
-            statusEl.innerHTML = `✅ Spotify Connected
-                <div class="spotify-status-tooltip" id="spotify-tooltip">
-                    <div class="spotify-user-info">
-                        <img id="user-avatar" src="${userInfo?.images?.[0]?.url || 'https://via.placeholder.com/40x40?text=User'}" alt="User">
-                        <div class="spotify-user-details">
-                            <h4 id="user-name">${userInfo?.display_name || 'Spotify User'}</h4>
-                            <p id="user-subscription">${userInfo?.product === 'premium' ? 'Spotify Premium ✨' : 'Spotify Free'}</p>
-                        </div>
-                    </div>
-                    <div class="spotify-actions">
-                        <button class="tooltip-btn refresh" onclick="aidj.refreshSpotifyConnection()">🔄 Refresh</button>
-                        <button class="tooltip-btn signout" onclick="aidj.signOutSpotify()">🚪 Sign Out</button>
-                    </div>
-                </div>`;
-            statusEl.style.color = '#a855f7';
-            statusEl.style.animation = 'psychic-pulse 2s ease-in-out infinite';
-            
-            console.log(`👤 Connected as: ${userInfo?.display_name || 'Unknown User'}`);
-            
-            // Fetch user info if not provided
-            if (!userInfo) {
-                this.fetchSpotifyUserInfo();
-            }
-        } else {
-            console.log('❌ Setting disconnected status');
-            statusEl.innerHTML = '❌ Not Connected';
-            statusEl.style.color = '#ef4444';
-            statusEl.style.animation = 'none';
-        }
-    }
-    
-    async fetchSpotifyUserInfo() {
+    // Statistics
+    async fetchStats() {
         try {
-            const response = await fetch('/api/spotify/me');
-            if (response.ok) {
-                const userInfo = await response.json();
-                this.updateSpotifyStatus(true, userInfo);
-            }
-        } catch (error) {
-            console.error('Failed to fetch user info:', error);
-        }
-    }
-    
-    async refreshSpotifyConnection() {
-        this.showNotification('🔄 MEW is checking psychic connection to Spotify...');
-        
-        const statusData = await this.makeAPICallWithErrorHandling('/api/spotify-status', {
-            method: 'GET'
-        });
-        
-        if (statusData && statusData.connected) {
-            this.showNotification('✅ Spotify connection is strong!');
-            // Fetch fresh user info
-            this.fetchSpotifyUserInfo();
-        } else {
-            this.showNotification('❌ Connection lost. Redirecting to reconnect...', 'error');
-            setTimeout(() => {
-                window.location.href = '/login';
-            }, 2000);
-        }
-    }
-    
-    signOutSpotify() {
-        if (confirm('Sign out of Spotify? You\'ll need to reconnect to continue DJing.')) {
-            this.sendCommand('spotify-signout');
-            this.updateSpotifyStatus(false);
-            this.showNotification('👋 Signed out of Spotify');
-            
-            // Show connection modal after a delay
-            setTimeout(() => {
-                document.getElementById('connection-panel').style.display = 'flex';
-            }, 1500);
-        }
-    }
-
-    updateDJState(state) {
-        this.isPlaying = state.isPlaying;
-        
-        // Update play/pause buttons
-        const playBtn = document.getElementById('play-btn');
-        const pauseBtn = document.getElementById('pause-btn');
-        
-        if (this.isPlaying) {
-            playBtn.style.opacity = '0.5';
-            pauseBtn.style.opacity = '1';
-        } else {
-            playBtn.style.opacity = '1';
-            pauseBtn.style.opacity = '0.5';
-        }
-    }
-
-    updateCurrentTrack(track) {
-        this.currentTrack = track;
-        
-        if (track) {
-            document.getElementById('current-artwork').src = track.album?.images?.[0]?.url || 'https://via.placeholder.com/200x200?text=No+Image';
-            document.getElementById('current-title').textContent = track.name;
-            document.getElementById('current-artist').textContent = track.artists?.map(a => a.name).join(', ') || 'Unknown Artist';
-            
-            // Update track stats (these would come from audio analysis)
-            document.getElementById('current-bpm').textContent = track.bpm || '--';
-            document.getElementById('current-key').textContent = track.key || '--';
-            document.getElementById('current-energy').textContent = track.energy ? Math.round(track.energy * 100) + '%' : '--';
-        }
-    }
-
-    updateQueue(queue) {
-        this.queue = queue;
-        const queueList = document.getElementById('queue-list');
-        
-        if (queue.length === 0) {
-            queueList.innerHTML = '<p class="empty-queue">Queue is empty</p>';
-            return;
-        }
-        
-        queueList.innerHTML = queue.map((item, index) => `
-            <div class="queue-item" data-index="${index}">
-                <img src="${item.track?.album?.images?.[2]?.url || 'https://via.placeholder.com/50x50'}" alt="Track">
-                <div class="queue-item-info">
-                    <h4>${item.track?.name || 'Unknown Track'}</h4>
-                    <p>${item.track?.artists?.map(a => a.name).join(', ') || 'Unknown Artist'}</p>
-                </div>
-                <div class="queue-item-stats">
-                    <div>BPM: ${Math.round(item.analysis?.bpm || 0)}</div>
-                    <div>Key: ${item.analysis?.key || '--'}</div>
-                    <div>Energy: ${Math.round((item.analysis?.energy || 0) * 100)}%</div>
-                </div>
-                <button onclick="aidj.removeFromQueue(${index})" class="remove-btn">❌</button>
-            </div>
-        `).join('');
-        
-        // Update next track display
-        if (queue.length > 0) {
-            const nextTrack = queue[0];
-            document.getElementById('next-track-info').innerHTML = `
-                <h4>${nextTrack.track?.name}</h4>
-                <p>${nextTrack.track?.artists?.map(a => a.name).join(', ')}</p>
-                <div class="track-stats">
-                    <span>BPM: ${Math.round(nextTrack.analysis?.bpm || 0)}</span>
-                    <span>Key: ${nextTrack.analysis?.key || '--'}</span>
-                </div>
-            `;
-        }
-    }
-
-    submitSongRequest(customRequest) {
-        const requestInput = document.getElementById('song-request');
-        const request = customRequest || requestInput.value.trim();
-        
-        if (!request) {
-            this.showNotification('⚠️ Please enter a song or mood request', 'error');
-            return;
-        }
-        
-        // Hide suggestions when submitting
-        this.hideSuggestions();
-        
-        this.sendCommand('request-song', { request });
-        
-        // Track Claude token usage for AI song processing
-        const isNaturalLanguage = /^(play something|give me|i want|mood|feel like|vibe)/i.test(request.trim());
-        this.trackClaudeUsage(isNaturalLanguage ? 300 : 150);
-        
-        if (!customRequest) {
-            requestInput.value = '';
-        }
-        
-        // Show different messages based on request type
-        const message = isNaturalLanguage ? 
-            `🧠 Finding perfect match for: "${request}"` :
-            `🎵 Adding to queue: "${request}"`;
-            
-        this.showNotification(message);
-    }
-
-    toggleEffect(effectName) {
-        const btn = document.querySelector(`[data-effect="${effectName}"]`);
-        const isActive = btn.classList.contains('active');
-        
-        // Remove active state from all effect buttons
-        document.querySelectorAll('.effect-btn').forEach(b => b.classList.remove('active'));
-        
-        if (!isActive) {
-            btn.classList.add('active');
-            this.sendCommand('apply-effect', { effect: effectName, enabled: true });
-            this.showNotification(`🎛️ ${effectName.toUpperCase()} ON`);
-        } else {
-            this.sendCommand('apply-effect', { effect: effectName, enabled: false });
-            this.showNotification(`🎛️ ${effectName.toUpperCase()} OFF`);
-        }
-    }
-
-    updateCrossfader(value) {
-        // Send crossfader position to server for mixing
-        this.sendCommand('crossfader', { position: value });
-        
-        // Visual feedback
-        const crossfader = document.getElementById('crossfader');
-        if (value < 30) {
-            crossfader.style.background = 'linear-gradient(90deg, #ff6b35 0%, #ff6b35 30%, #333 50%, #333 100%)';
-        } else if (value > 70) {
-            crossfader.style.background = 'linear-gradient(90deg, #333 0%, #333 50%, #f7931e 70%, #f7931e 100%)';
-        } else {
-            crossfader.style.background = 'linear-gradient(90deg, #ff6b35 0%, #333 50%, #f7931e 100%)';
-        }
-    }
-
-    toggleAutoMix() {
-        const mixBtn = document.getElementById('mix-btn');
-        const isAutoMix = mixBtn.classList.contains('active');
-        
-        if (isAutoMix) {
-            mixBtn.classList.remove('active');
-            mixBtn.textContent = '🎛️ AUTO MIX';
-            this.sendCommand('set-mix-mode', { mode: 'manual' });
-            this.showNotification('🤲 Manual mixing mode');
-        } else {
-            mixBtn.classList.add('active');
-            mixBtn.textContent = '🤖 AI MIXING';
-            this.sendCommand('set-mix-mode', { mode: 'auto' });
-            this.showNotification('🧠 AI mixing enabled');
-        }
-    }
-
-    clearQueue() {
-        if (confirm('Clear entire queue?')) {
-            this.sendCommand('clear-queue');
-            this.showNotification('🗑️ Queue cleared');
-        }
-    }
-
-    shuffleQueue() {
-        this.sendCommand('shuffle-queue');
-        this.showNotification('🔀 Queue shuffled');
-    }
-
-    removeFromQueue(index) {
-        this.sendCommand('remove-from-queue', { index });
-    }
-
-    // Remove old takeover function since MEW is always in control
-
-    getAISuggestion() {
-        this.trackClaudeUsage(300); // Estimate for AI suggestion
-        this.sendCommand('get-ai-suggestion');
-        this.showNotification('🔮 MEW is using psychic powers...');
-    }
-
-    generateSmartQueue() {
-        this.trackClaudeUsage(400); // Estimate for smart queue generation
-        this.sendCommand('generate-smart-queue');
-        this.showNotification('✨ MEW is reading the crowd\'s energy...');
-    }
-
-    initSearchFeatures() {
-        const searchInput = document.getElementById('song-request');
-        const suggestionsContainer = document.getElementById('search-suggestions');
-        
-        let searchTimeout = null;
-        let selectedIndex = -1;
-        let currentSuggestions = [];
-
-        // Debounced search as user types
-        searchInput.addEventListener('input', (e) => {
-            const query = e.target.value.trim();
-            
-            clearTimeout(searchTimeout);
-            selectedIndex = -1;
-
-            if (query.length < 2) {
-                this.hideSuggestions();
-                return;
-            }
-
-            // Show loading state
-            suggestionsContainer.innerHTML = '<div class="search-loading">🔍 Searching...</div>';
-            suggestionsContainer.classList.add('show');
-
-            // Debounce search requests
-            searchTimeout = setTimeout(() => {
-                this.searchSpotifyTracks(query);
-            }, 300);
-        });
-
-        // Keyboard navigation
-        searchInput.addEventListener('keydown', (e) => {
-            const suggestions = document.querySelectorAll('.suggestion-item');
-            
-            switch (e.key) {
-                case 'ArrowDown':
-                    e.preventDefault();
-                    selectedIndex = Math.min(selectedIndex + 1, suggestions.length - 1);
-                    this.updateSelectedSuggestion();
-                    break;
-                    
-                case 'ArrowUp':
-                    e.preventDefault();
-                    selectedIndex = Math.max(selectedIndex - 1, -1);
-                    this.updateSelectedSuggestion();
-                    break;
-                    
-                case 'Enter':
-                    e.preventDefault();
-                    if (selectedIndex >= 0 && currentSuggestions[selectedIndex]) {
-                        this.selectSuggestion(currentSuggestions[selectedIndex]);
-                    } else {
-                        this.submitSongRequest();
-                    }
-                    break;
-                    
-                case 'Escape':
-                    this.hideSuggestions();
-                    searchInput.blur();
-                    break;
-            }
-        });
-
-        // Hide suggestions when clicking outside
-        document.addEventListener('click', (e) => {
-            if (!searchInput.contains(e.target) && !suggestionsContainer.contains(e.target)) {
-                this.hideSuggestions();
-            }
-        });
-
-        // Focus input shows recent suggestions if any
-        searchInput.addEventListener('focus', () => {
-            if (currentSuggestions.length > 0 && searchInput.value.trim().length >= 2) {
-                suggestionsContainer.classList.add('show');
-            }
-        });
-    }
-
-    async searchSpotifyTracks(query) {
-        const data = await this.makeAPICallWithErrorHandling('/api/search', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ query, limit: 8 })
-        });
-
-        if (data) {
-            currentSuggestions = data.tracks?.items || [];
-            this.trackSpotifyAPI();
-            this.displaySuggestions(currentSuggestions);
-        } else {
-            document.getElementById('search-suggestions').innerHTML = 
-                '<div class="search-no-results">⚠️ Search failed. Check MEW\'s connection.</div>';
-        }
-    }
-
-    displaySuggestions(tracks) {
-        const suggestionsContainer = document.getElementById('search-suggestions');
-        
-        if (tracks.length === 0) {
-            suggestionsContainer.innerHTML = '<div class="search-no-results">🎵 No tracks found</div>';
-            return;
-        }
-
-        const html = tracks.map((track, index) => {
-            const duration = this.formatDuration(track.duration_ms);
-            const imageUrl = track.album?.images?.[2]?.url || 'https://via.placeholder.com/40x40?text=♪';
-            
-            return `
-                <div class="suggestion-item" data-index="${index}">
-                    <img src="${imageUrl}" alt="Album" class="suggestion-artwork">
-                    <div class="suggestion-info">
-                        <p class="suggestion-title">${this.escapeHtml(track.name)}</p>
-                        <p class="suggestion-artist">${this.escapeHtml(track.artists?.map(a => a.name).join(', ') || 'Unknown Artist')}</p>
-                    </div>
-                    <div class="suggestion-duration">${duration}</div>
-                </div>
-            `;
-        }).join('');
-
-        suggestionsContainer.innerHTML = html;
-        suggestionsContainer.classList.add('show');
-
-        // Add click listeners to suggestions
-        document.querySelectorAll('.suggestion-item').forEach((item, index) => {
-            item.addEventListener('click', () => {
-                this.selectSuggestion(tracks[index]);
-            });
-        });
-    }
-
-    updateSelectedSuggestion() {
-        document.querySelectorAll('.suggestion-item').forEach((item, index) => {
-            item.classList.toggle('selected', index === selectedIndex);
-        });
-    }
-
-    selectSuggestion(track) {
-        const searchInput = document.getElementById('song-request');
-        searchInput.value = `${track.name} by ${track.artists?.[0]?.name || 'Unknown'}`;
-        
-        this.hideSuggestions();
-        
-        // Auto-submit the selected track
-        this.submitSongRequest();
-    }
-
-    hideSuggestions() {
-        document.getElementById('search-suggestions').classList.remove('show');
-        selectedIndex = -1;
-    }
-
-    formatDuration(ms) {
-        const seconds = Math.floor(ms / 1000);
-        const mins = Math.floor(seconds / 60);
-        const secs = seconds % 60;
-        return `${mins}:${secs.toString().padStart(2, '0')}`;
-    }
-
-    escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-
-    initResourceMonitoring() {
-        // Update resource dashboard every 30 seconds
-        this.updateResourceDashboard();
-        setInterval(() => {
-            this.updateResourceDashboard();
-        }, 30000);
-
-        // Fetch initial usage stats
-        this.fetchUsageStats();
-    }
-
-    async fetchUsageStats() {
-        try {
-            console.log('📊 Fetching usage stats...');
             const response = await fetch('/api/usage-stats');
             if (response.ok) {
                 const stats = await response.json();
-                console.log('📊 Usage stats received:', stats);
-                this.usageStats = { ...this.usageStats, ...stats };
-                this.updateResourceDashboard();
+                this.stats = stats;
+                this.updateStatsDisplay();
             }
         } catch (error) {
-            console.error('Failed to fetch usage stats:', error);
+            console.error('Failed to fetch stats:', error);
         }
     }
 
-    updateResourceDashboard() {
-        const sessionHours = (Date.now() - this.usageStats.sessionStart) / (1000 * 60 * 60);
-        const totalRenderHours = this.usageStats.renderHours + sessionHours;
-
-        console.log('📊 Updating resource dashboard:', {
-            claudeTokens: this.usageStats.claudeTokens,
-            spotifyAPICalls: this.usageStats.spotifyAPICalls,
-            totalRenderHours: totalRenderHours.toFixed(2)
-        });
-
-        // Update Claude tokens
-        this.updateResourceItem('claude-tokens', 'claude-progress', 
-            this.usageStats.claudeTokens, 10000, 
-            `${this.formatNumber(this.usageStats.claudeTokens)} / ~10k`);
-
-        // Update Render hours
-        this.updateResourceItem('render-hours', 'render-progress', 
-            totalRenderHours, 750, 
-            `${totalRenderHours.toFixed(1)}h / 750h`);
-
-        // Update Spotify API
-        this.updateResourceItem('spotify-api', 'spotify-progress', 
-            this.usageStats.spotifyAPICalls, 10000, 
-            `${this.formatNumber(this.usageStats.spotifyAPICalls)} / 10k`);
-
-        // Update estimated cost
-        const estimatedCost = this.calculateEstimatedCost();
-        document.getElementById('estimated-cost').textContent = `$${estimatedCost.toFixed(3)}`;
-
-        // Check for alerts
-        this.checkResourceAlerts();
-    }
-
-    updateResourceItem(valueId, progressId, current, max, displayText) {
-        const percentage = Math.min((current / max) * 100, 100);
-        const progressBar = document.getElementById(progressId);
-        const valueEl = document.getElementById(valueId);
-
-        // Update text
-        valueEl.textContent = displayText;
-
-        // Update progress bar
-        progressBar.style.width = `${percentage}%`;
-
-        // Update colors based on usage
-        progressBar.className = 'resource-progress';
-        if (percentage > 90) {
-            progressBar.classList.add('danger');
-        } else if (percentage > 75) {
-            progressBar.classList.add('warning');
-        }
-    }
-
-    calculateEstimatedCost() {
-        // Claude costs (rough estimates)
-        const claudeCost = (this.usageStats.claudeTokens / 1000) * 0.003; // ~$3 per 1M tokens
-
-        // Render is free up to 750 hours
-        const renderCost = 0;
-
-        // Spotify API is free up to 10k requests
-        const spotifyCost = 0;
-
-        return claudeCost + renderCost + spotifyCost;
-    }
-
-    checkResourceAlerts() {
-        const alertsContainer = document.getElementById('resource-alerts');
-        const alerts = [];
-
-        const sessionHours = (Date.now() - this.usageStats.sessionStart) / (1000 * 60 * 60);
-        const totalRenderHours = this.usageStats.renderHours + sessionHours;
-
-        // Claude token alerts
-        if (this.usageStats.claudeTokens > 9000) {
-            alerts.push({
-                type: 'danger',
-                icon: '⚠️',
-                message: 'Claude tokens approaching daily limit! Consider reducing AI features.'
-            });
-        } else if (this.usageStats.claudeTokens > 7500) {
-            alerts.push({
-                type: 'warning',
-                icon: '⚡',
-                message: 'Claude token usage is high. Monitor AI request frequency.'
-            });
-        }
-
-        // Render hours alerts
-        if (totalRenderHours > 675) {
-            alerts.push({
-                type: 'danger',
-                icon: '⏰',
-                message: 'Render hours approaching monthly limit! App may sleep more.'
-            });
-        } else if (totalRenderHours > 550) {
-            alerts.push({
-                type: 'warning',
-                icon: '📊',
-                message: 'Render hours usage is getting high for this month.'
-            });
-        }
-
-        // Spotify API alerts
-        if (this.usageStats.spotifyAPICalls > 9000) {
-            alerts.push({
-                type: 'danger',
-                icon: '🎵',
-                message: 'Spotify API calls approaching daily limit! Reduce search frequency.'
-            });
-        } else if (this.usageStats.spotifyAPICalls > 7500) {
-            alerts.push({
-                type: 'warning',
-                icon: '🔍',
-                message: 'Spotify API usage is high. Consider fewer search requests.'
-            });
-        }
-
-        // Success message when all is good
-        if (alerts.length === 0 && this.usageStats.claudeTokens > 0) {
-            alerts.push({
-                type: 'info',
-                icon: '✨',
-                message: 'All resources operating within limits. MEW is happy!'
-            });
-        }
-
-        // Update alerts display
-        alertsContainer.innerHTML = alerts.map(alert => 
-            `<div class="resource-alert ${alert.type}">
-                <span>${alert.icon}</span>
-                <span>${alert.message}</span>
-            </div>`
-        ).join('');
-    }
-
-    formatNumber(num) {
-        if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
-        if (num >= 1000) return (num / 1000).toFixed(1) + 'k';
-        return num.toString();
-    }
-
-    // Track usage when making requests
-    trackClaudeUsage(tokens) {
-        this.usageStats.claudeTokens += tokens;
-        this.updateResourceDashboard();
-    }
-
-    trackSpotifyAPI() {
-        this.usageStats.spotifyAPICalls += 1;
-        this.updateResourceDashboard();
-    }
-
-    // Test function to verify tracking works
-    async testTracking(type) {
-        try {
-            console.log(`🧪 Testing ${type} tracking...`);
-            const response = await fetch('/api/test-tracking', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ type })
-            });
-            
-            if (response.ok) {
-                const result = await response.json();
-                console.log(`🧪 Test result:`, result);
-                this.showNotification(`🧪 Added test ${type} data - check dashboard!`);
-            }
-        } catch (error) {
-            console.error('Test tracking failed:', error);
-        }
-    }
-
-    // Test song request functionality
-    async testSongRequest() {
-        try {
-            console.log('🧪 Testing song request system...');
-            this.showNotification('🧪 Testing song request system...');
-            
-            const response = await fetch('/api/test-song-request', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ request: 'Levels' })
-            });
-            
-            console.log('🧪 Response status:', response.status);
-            const result = await response.json();
-            console.log('🧪 Test song request result:', result);
-            
-            if (response.ok) {
-                this.showNotification(`🧪 Song request test passed! Found ${result.searchCount} tracks`);
-            } else {
-                this.showNotification(`❌ Song request test failed: ${result.error}`, 'error');
-            }
-        } catch (error) {
-            console.error('🚨 Test song request failed:', error);
-            this.showNotification(`❌ Test failed: ${error.message}`, 'error');
-        }
-    }
-
-    initWebAudio() {
-        try {
-            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            this.setupAudioEffects();
-        } catch (error) {
-            console.error('Web Audio not supported:', error);
-        }
-    }
-
-    setupAudioEffects() {
-        // Master gain for overall volume control
-        this.effects.masterGain = this.audioContext.createGain();
-        this.effects.masterGain.connect(this.audioContext.destination);
-
-        // Reverb effect
-        this.effects.reverb = this.audioContext.createConvolver();
-        this.createReverbBuffer();
-
-        // Filter effect (low/high pass)
-        this.effects.filter = this.audioContext.createBiquadFilter();
-        this.effects.filter.type = 'allpass';
-        this.effects.filter.frequency.value = 1000;
-
-        // Echo/Delay effect
-        this.effects.echo = this.audioContext.createDelay();
-        this.effects.echo.delayTime.value = 0.3;
-        const echoGain = this.audioContext.createGain();
-        echoGain.gain.value = 0.3;
-
-        // Connect effects chain
-        this.effects.echo.connect(echoGain);
-        echoGain.connect(this.effects.echo);
-        this.effects.echo.connect(this.effects.filter);
-        this.effects.filter.connect(this.effects.reverb);
-        this.effects.reverb.connect(this.effects.masterGain);
-    }
-
-    createReverbBuffer() {
-        const sampleRate = this.audioContext.sampleRate;
-        const length = sampleRate * 2; // 2 seconds of reverb
-        const impulse = this.audioContext.createBuffer(2, length, sampleRate);
-
-        for (let channel = 0; channel < 2; channel++) {
-            const channelData = impulse.getChannelData(channel);
-            for (let i = 0; i < length; i++) {
-                channelData[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, 2);
-            }
-        }
-
-        this.effects.reverb.buffer = impulse;
-    }
-
-    initSpotifyPlayer() {
-        window.onSpotifyWebPlaybackSDKReady = () => {
-            this.player = new Spotify.Player({
-                name: 'DJ MEW - Legendary Mixer',
-                getOAuthToken: (cb) => {
-                    // Get token from server
-                    fetch('/api/spotify-token')
-                        .then(response => response.json())
-                        .then(data => cb(data.access_token))
-                        .catch(error => console.error('Error getting token:', error));
-                },
-                volume: 0.8
-            });
-
-            // Error handling
-            this.player.addListener('initialization_error', ({ message }) => {
-                console.error('Failed to initialize player:', message);
-            });
-
-            this.player.addListener('authentication_error', ({ message }) => {
-                console.error('Authentication error:', message);
-            });
-
-            this.player.addListener('account_error', ({ message }) => {
-                console.error('Account error:', message);
-            });
-
-            // Ready
-            this.player.addListener('ready', ({ device_id }) => {
-                console.log('🎧 DJ MEW player ready with device ID:', device_id);
-                this.deviceId = device_id;
-                this.showNotification('🔮 MEW\'s legendary mixing powers activated!');
-                
-                // Automatically start mixing when player is ready
-                this.startAutomaticMixing();
-            });
-
-            // Not ready
-            this.player.addListener('not_ready', ({ device_id }) => {
-                console.log('Device went offline:', device_id);
-            });
-
-            // Player state changes
-            this.player.addListener('player_state_changed', (state) => {
-                if (!state) return;
-
-                this.handlePlayerStateChange(state);
-                
-                // Auto-mix when track is about to end
-                if (this.autoMixEnabled && this.shouldStartNextTrack(state)) {
-                    this.performAutomaticTransition();
-                }
-            });
-
-            // Connect the player
-            this.player.connect().then(success => {
-                if (success) {
-                    console.log('🔮 Successfully connected to Spotify Web Playback SDK');
-                } else {
-                    console.error('❌ Failed to connect to Spotify Web Playback SDK');
-                }
-            });
-        };
-    }
-
-    handlePlayerStateChange(state) {
-        const track = state.track_window.current_track;
-        
-        if (track && track.id !== this.currentTrack?.id) {
-            this.currentTrack = track;
-            this.updateNowPlaying(track);
-            
-            // Analyze track for mixing
-            this.analyzeCurrentTrack(track.id);
-        }
-
-        this.isPlaying = !state.paused;
-        this.updatePlaybackControls();
-    }
-
-    shouldStartNextTrack(state) {
-        // Start next track when 30 seconds remaining
-        const remaining = state.duration - state.position;
-        return remaining < 30000 && this.queue.length > 0;
-    }
-
-    async performAutomaticTransition() {
-        if (this.mixingInProgress || this.queue.length === 0) return;
-        
-        this.mixingInProgress = true;
-        
-        const nextTrack = this.queue[0];
-        this.showNotification(`🔮 MEW senses the perfect moment... transitioning to "${nextTrack.track?.name}"`);
-
-        // Update status
-        document.getElementById('next-action').textContent = `🎵 Transitioning to ${nextTrack.track?.name}`;
-        
-        try {
-            // Get track analysis for perfect mixing
-            const analysis = await this.getTrackMixingData(nextTrack.trackId);
-            
-            // Calculate perfect transition timing
-            const transitionDuration = this.calculateTransitionDuration(analysis);
-            
-            this.showNotification(`✨ Analyzing harmonics... ${transitionDuration/1000}s psychic crossfade incoming`);
-            
-            // Start crossfade transition
-            await this.executeAutomaticCrossfade(nextTrack, transitionDuration);
-            
-            // Update queue
-            this.queue.shift();
-            this.updateQueue(this.queue);
-            
-            this.showNotification(`🎵 Legendary transition complete! "${nextTrack.track?.name}" now playing`);
-            document.getElementById('next-action').textContent = '🧠 Analyzing next transition opportunity';
-            
-        } catch (error) {
-            console.error('Transition error:', error);
-            this.showNotification('⚠️ Psychic interference detected, using backup transition');
-            this.playNextTrackDirect();
+    updateStatsDisplay() {
+        // Update Spotify API calls
+        const spotifyEl = document.getElementById('spotify-api-count');
+        if (spotifyEl) {
+            spotifyEl.textContent = `${this.stats.spotifyAPICalls || 0} / 10k`;
         }
         
-        this.mixingInProgress = false;
-    }
-
-    async executeAutomaticCrossfade(nextTrack, duration) {
-        // Show MEW controlling the crossfader
-        this.animateCrossfader(duration);
+        // Update songs analyzed
+        const analyzedEl = document.getElementById('songs-analyzed');
+        if (analyzedEl) {
+            analyzedEl.textContent = `${this.stats.songsAnalyzed || 0} analyzed`;
+        }
         
-        // Apply echo/reverb to current track
-        this.applyTransitionEffects('out');
+        // Update optimizations
+        const optimizationsEl = document.getElementById('optimizations-count');  
+        if (optimizationsEl) {
+            optimizationsEl.textContent = `${this.stats.queueOptimizations || 0} optimizations`;
+        }
         
-        // Wait for effect buildup
-        await this.sleep(2000);
-        
-        // Play next track
-        await this.playTrackOnDevice(nextTrack.trackId);
-        
-        // Apply intro effects to new track
-        this.applyTransitionEffects('in');
-        
-        // Clear effects after transition
-        setTimeout(() => {
-            this.clearAllEffects();
-        }, duration);
-    }
-
-    animateCrossfader(duration) {
-        const crossfader = document.getElementById('crossfader');
-        const steps = 20;
-        const stepTime = duration / steps;
-        
-        let currentStep = 0;
-        
-        const animate = () => {
-            if (currentStep >= steps) {
-                crossfader.value = 50; // Return to center
-                return;
-            }
-            
-            // Create smooth transition curve
-            const progress = currentStep / steps;
-            const value = 50 + (Math.sin(progress * Math.PI) * 40); // Smooth curve from 50 to 90 and back
-            crossfader.value = value;
-            
-            currentStep++;
-            setTimeout(animate, stepTime);
-        };
-        
-        animate();
-    }
-
-    applyTransitionEffects(direction) {
-        if (direction === 'out') {
-            // Outgoing track effects
-            this.effects.echo.delayTime.value = 0.125; // 1/8 note echo
-            this.effects.filter.type = 'highpass';
-            this.effects.filter.frequency.value = 800;
-            
-            // Show effects in UI
-            this.showEffectActive('echo');
-            this.showEffectActive('filter');
-            
-        } else {
-            // Incoming track effects
-            this.effects.filter.type = 'lowpass';
-            this.effects.filter.frequency.value = 2000;
-            
-            this.showEffectActive('filter');
-            
-            // Gradually remove filter
-            setTimeout(() => {
-                this.effects.filter.type = 'allpass';
-                this.hideEffectActive('filter');
-            }, 4000);
+        // Update render hours
+        const renderEl = document.getElementById('render-hours');
+        if (renderEl) {
+            const hours = this.stats.renderHours || 0;
+            renderEl.textContent = `${hours.toFixed(1)}h / 750h`;
         }
     }
 
-    showEffectActive(effectName) {
-        const indicator = document.getElementById(`effect-${effectName}`);
-        if (indicator) {
-            indicator.classList.add('active');
-        }
-    }
-
-    hideEffectActive(effectName) {
-        const indicator = document.getElementById(`effect-${effectName}`);
-        if (indicator) {
-            indicator.classList.remove('active');
-        }
-    }
-
-    clearAllEffects() {
-        this.effects.filter.type = 'allpass';
-        this.effects.filter.frequency.value = 1000;
-        this.effects.echo.delayTime.value = 0;
-        
-        // Hide all effect indicators
-        ['reverb', 'filter', 'echo', 'drop'].forEach(effect => {
-            this.hideEffectActive(effect);
-        });
-    }
-
-    async playTrackOnDevice(trackId) {
-        if (!this.deviceId) return;
-
-        const response = await fetch('/api/play-track', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                track_id: trackId,
-                device_id: this.deviceId
-            })
-        });
-
-        if (!response.ok) {
-            throw new Error('Failed to play track on device');
-        }
-    }
-
-    async getTrackMixingData(trackId) {
-        const response = await fetch(`/api/track-analysis/${trackId}`);
-        if (!response.ok) {
-            throw new Error('Failed to get track analysis');
-        }
-        return await response.json();
-    }
-
-    calculateTransitionDuration(analysis) {
-        // Calculate based on BPM and energy
-        const bpm = analysis.tempo || 128;
-        const energy = analysis.energy || 0.5;
-        
-        // Higher energy = shorter transitions
-        const baseDuration = energy > 0.7 ? 8000 : 16000;
-        
-        // Sync to beat (assuming 4/4 time)
-        const beatDuration = (60 / bpm) * 1000;
-        const bars = Math.round(baseDuration / (beatDuration * 4));
-        
-        return bars * beatDuration * 4;
-    }
-
-    startAutomaticMixing() {
-        // Enable auto-mix by default
-        this.autoMixEnabled = true;
-        document.getElementById('mix-btn').classList.add('active');
-        document.getElementById('mix-btn').textContent = '🐾 MEW MIXING';
-        
-        this.showNotification('🔮 Legendary automatic mixing enabled! MEW will handle everything.');
-    }
-
-    sleep(ms) {
-        return new Promise(resolve => setTimeout(resolve, ms));
-    }
-
-    playNextTrackDirect() {
-        if (this.queue.length > 0) {
-            const nextTrack = this.queue.shift();
-            this.playTrackOnDevice(nextTrack.trackId);
-            this.updateQueue(this.queue);
-        }
-    }
-
-    handleTokenExpiry(message) {
-        this.updateSpotifyStatus(false);
-        this.showNotification(`🔮 ${message}`, 'error');
-        
-        // Show connection modal
-        setTimeout(() => {
-            document.getElementById('connection-panel').style.display = 'flex';
-        }, 2000);
-    }
-
-    async makeAPICallWithErrorHandling(url, options) {
-        try {
-            const response = await fetch(url, options);
-            
-            if (!response.ok) {
-                if (response.status === 401) {
-                    this.handleTokenExpiry('MEW\'s connection to Spotify has expired. Please reconnect!');
-                    return null;
-                }
-                throw new Error(`API call failed: ${response.status}`);
-            }
-            
-            return await response.json();
-        } catch (error) {
-            console.error('API Error:', error);
-            this.showNotification(`⚠️ ${error.message}`, 'error');
-            return null;
-        }
-    }
-
-    showManualAddDialog() {
-        const query = prompt('Search for a song:');
-        if (query) {
-            this.searchAndAddTrack(query);
-        }
-    }
-
-    async searchAndAddTrack(query) {
-        const searchData = await this.makeAPICallWithErrorHandling('/api/search', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ query })
-        });
-        
-        if (searchData && searchData.tracks && searchData.tracks.items.length > 0) {
-            const track = searchData.tracks.items[0]; // Take first result
-            
-            const addData = await this.makeAPICallWithErrorHandling('/api/queue-track', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ trackId: track.id })
-            });
-            
-            if (addData) {
-                this.showNotification(`➕ MEW added: ${track.name}`);
-            }
-        } else if (searchData) {
-            this.showNotification('❌ No tracks found', 'error');
-        }
-    }
-
-    updateAIInsights(insights) {
-        if (insights.crowdEnergy) {
-            document.getElementById('crowd-energy').textContent = insights.crowdEnergy;
-        }
-        if (insights.mixStrategy) {
-            document.getElementById('mix-strategy').textContent = insights.mixStrategy;
-        }
-        if (insights.nextMove) {
-            document.getElementById('next-move').textContent = insights.nextMove;
-        }
-    }
-
-    showMixTransition(transition) {
-        // Visual feedback for transitions
-        const overlay = document.createElement('div');
-        overlay.className = 'transition-overlay';
-        overlay.innerHTML = `
-            <div class="transition-info">
-                <h3>🎛️ ${transition.type}</h3>
-                <p>${transition.description}</p>
-            </div>
-        `;
-        
-        document.body.appendChild(overlay);
-        
-        setTimeout(() => {
-            overlay.remove();
-        }, 3000);
-    }
-
+    // Notifications
     showNotification(message, type = 'info') {
+        console.log(`📢 ${message}`);
+        
+        // Create notification element
         const notification = document.createElement('div');
-        notification.className = `notification notification-${type}`;
+        notification.className = `notification ${type}`;
         notification.textContent = message;
         
-        // Style the notification
-        notification.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            padding: 15px 25px;
-            background: ${type === 'error' ? 'rgba(244, 67, 54, 0.9)' : 'rgba(255, 107, 53, 0.9)'};
-            color: white;
-            border-radius: 25px;
-            font-weight: bold;
-            z-index: 1001;
-            animation: slideIn 0.3s ease;
-        `;
-        
+        // Add to page
         document.body.appendChild(notification);
         
+        // Show with animation
+        setTimeout(() => notification.classList.add('show'), 100);
+        
+        // Remove after 4 seconds
         setTimeout(() => {
-            notification.style.animation = 'slideOut 0.3s ease';
-            setTimeout(() => notification.remove(), 300);
-        }, 3000);
+            notification.classList.remove('show');
+            setTimeout(() => document.body.removeChild(notification), 300);
+        }, 4000);
+    }
+
+    // Spotify Web Playbook SDK Integration
+    async initSpotifyPlayer() {
+        try {
+            const tokenResponse = await fetch('/api/spotify-token');
+            const { access_token } = await tokenResponse.json();
+            
+            const player = new Spotify.Player({
+                name: 'DJ MEW - Smart Queue Master',
+                getOAuthToken: cb => { cb(access_token); },
+                volume: 0.8
+            });
+            
+            // Ready
+            player.addListener('ready', ({ device_id }) => {
+                console.log('🎵 Spotify player ready:', device_id);
+                this.deviceId = device_id;
+            });
+            
+            // Not ready
+            player.addListener('not_ready', ({ device_id }) => {
+                console.log('🎵 Spotify player not ready:', device_id);
+            });
+            
+            // Connect to the player
+            player.connect();
+            
+        } catch (error) {
+            console.error('Failed to initialize Spotify player:', error);
+        }
+    }
+
+    updateUI() {
+        this.renderQueue();
+        this.updateNowPlaying();  
+        this.updatePlaybackControls();
+        this.updateStatsDisplay();
     }
 }
 
-// Add CSS animations
-const style = document.createElement('style');
-style.textContent = `
-    @keyframes slideIn {
-        from { transform: translateX(100%); opacity: 0; }
-        to { transform: translateX(0); opacity: 1; }
-    }
-    
-    @keyframes slideOut {
-        from { transform: translateX(0); opacity: 1; }
-        to { transform: translateX(100%); opacity: 0; }
-    }
-    
-    .transition-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.8);
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        z-index: 1002;
-        animation: fadeIn 0.5s ease;
-    }
-    
-    .transition-info {
-        text-align: center;
-        color: white;
-        background: linear-gradient(45deg, #ff6b35, #f7931e);
-        padding: 40px;
-        border-radius: 20px;
-        border: 2px solid #ffd700;
-        box-shadow: 0 0 50px rgba(255, 107, 53, 0.5);
-    }
-    
-    .transition-info h3 {
-        font-size: 2rem;
-        margin-bottom: 10px;
-    }
-    
-    @keyframes fadeIn {
-        from { opacity: 0; }
-        to { opacity: 1; }
-    }
-    
-    .remove-btn {
-        background: none;
-        border: none;
-        color: #ff4444;
-        cursor: pointer;
-        font-size: 1.2rem;
-        padding: 5px;
-        border-radius: 50%;
-        transition: all 0.3s ease;
-    }
-    
-    .remove-btn:hover {
-        background: rgba(244, 67, 54, 0.2);
-        transform: scale(1.1);
-    }
-`;
-document.head.appendChild(style);
+// Initialize DJ MEW v2.0
+window.aidj = new DJMEWv2();
 
-// Initialize the AI DJ
-const aidj = new AIdjPro();
+console.log('🔮✨ DJ MEW v2.0 - Smart Queue Master Ready!');
+console.log('🎯 Features: Smart search, beat analysis, queue optimization');
+console.log('💡 Focus: Music intelligence that actually works!');

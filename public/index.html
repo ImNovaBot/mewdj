@@ -3,91 +3,53 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DJ MEW - Psychic Festival Mixing</title>
+    <title>DJ MEW v2.0 - Smart Queue Master</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="dj-booth">
         <header class="booth-header">
-            <h1>🐾 DJ MEW</h1>
+            <h1>🐾 DJ MEW v2.0</h1>
             <div class="connection-status">
-                <span id="spotify-status">❌ Not Connected
-                    <div class="spotify-status-tooltip" id="spotify-tooltip">
-                        <div class="spotify-user-info">
-                            <img id="user-avatar" src="" alt="User">
-                            <div class="spotify-user-details">
-                                <h4 id="user-name">Loading...</h4>
-                                <p id="user-subscription">Spotify Premium</p>
-                            </div>
-                        </div>
-                        <div class="spotify-actions">
-                            <button class="tooltip-btn refresh" onclick="aidj.refreshSpotifyConnection()">🔄 Refresh</button>
-                            <button class="tooltip-btn signout" onclick="aidj.signOutSpotify()">🚪 Sign Out</button>
-                        </div>
-                    </div>
-                </span>
-                <span id="ai-status">🔮 MEW AI Ready</span>
+                <span id="spotify-status">❌ Not Connected</span>
+                <span id="connection-indicator">🔴 Disconnected</span>
             </div>
         </header>
 
-        <!-- Resource Monitoring Dashboard -->
-        <div class="resource-dashboard">
-            <div class="resource-panel">
-                <div class="resource-item">
-                    <div class="resource-icon">🧠</div>
-                    <div class="resource-info">
-                        <h4>Claude Tokens</h4>
-                        <p class="resource-value" id="claude-tokens">0 / ~10k</p>
-                        <div class="resource-bar">
-                            <div class="resource-progress" id="claude-progress"></div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="resource-item">
-                    <div class="resource-icon">⚡</div>
-                    <div class="resource-info">
-                        <h4>Render Hours</h4>
-                        <p class="resource-value" id="render-hours">0h / 750h</p>
-                        <div class="resource-bar">
-                            <div class="resource-progress" id="render-progress"></div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="resource-item">
-                    <div class="resource-icon">🎵</div>
-                    <div class="resource-info">
+        <!-- Stats Dashboard -->
+        <div class="stats-dashboard">
+            <div class="stats-panel">
+                <div class="stat-item">
+                    <div class="stat-icon">🎵</div>
+                    <div class="stat-info">
                         <h4>Spotify API</h4>
-                        <p class="resource-value" id="spotify-api">0 / 10k</p>
-                        <div class="resource-bar">
-                            <div class="resource-progress" id="spotify-progress"></div>
-                        </div>
+                        <p id="spotify-api-count">0 / 10k</p>
                     </div>
                 </div>
                 
-                <div class="resource-item">
-                    <div class="resource-icon">💰</div>
-                    <div class="resource-info">
-                        <h4>Est. Cost</h4>
-                        <p class="resource-value" id="estimated-cost">$0.00</p>
-                        <div class="resource-subtext">This month</div>
+                <div class="stat-item">
+                    <div class="stat-icon">📊</div>
+                    <div class="stat-info">
+                        <h4>Songs Analyzed</h4>
+                        <p id="songs-analyzed">0 analyzed</p>
                     </div>
                 </div>
-            </div>
-            
-            <div class="resource-alerts" id="resource-alerts">
-                <!-- Alerts will appear here -->
-            </div>
-            
-            <!-- Temporary test buttons for tracking verification -->
-            <div style="margin-top: 15px; text-align: center; opacity: 0.7;">
-                <small style="color: #a1a1aa;">🧪 Debug:</small>
-                <button onclick="aidj.testTracking('claude')" style="margin: 0 5px; padding: 4px 8px; font-size: 0.8rem; background: rgba(138, 43, 226, 0.3); border: 1px solid rgba(138, 43, 226, 0.5); border-radius: 8px; color: #c084fc; cursor: pointer;">+100 Tokens</button>
-                <button onclick="aidj.testTracking('spotify')" style="margin: 0 5px; padding: 4px 8px; font-size: 0.8rem; background: rgba(138, 43, 226, 0.3); border: 1px solid rgba(138, 43, 226, 0.5); border-radius: 8px; color: #c084fc; cursor: pointer;">+5 API</button>
-                <button onclick="aidj.checkAuthStatus()" style="margin: 0 5px; padding: 4px 8px; font-size: 0.8rem; background: rgba(29, 185, 84, 0.3); border: 1px solid rgba(29, 185, 84, 0.5); border-radius: 8px; color: #1db954; cursor: pointer;">Check Auth</button>
-                <button onclick="window.location.href='/login'" style="margin: 0 5px; padding: 4px 8px; font-size: 0.8rem; background: rgba(29, 185, 84, 0.6); border: 1px solid rgba(29, 185, 84, 0.7); border-radius: 8px; color: #ffffff; cursor: pointer;">Force Login</button>
-                <button onclick="aidj.testSongRequest()" style="margin: 0 5px; padding: 4px 8px; font-size: 0.8rem; background: rgba(255, 165, 0, 0.6); border: 1px solid rgba(255, 165, 0, 0.7); border-radius: 8px; color: #ffffff; cursor: pointer;">Test Song</button>
+                
+                <div class="stat-item">
+                    <div class="stat-icon">🧠</div>
+                    <div class="stat-info">
+                        <h4>Queue Optimizations</h4>
+                        <p id="optimizations-count">0 optimizations</p>
+                    </div>
+                </div>
+                
+                <div class="stat-item">
+                    <div class="stat-icon">⚡</div>
+                    <div class="stat-info">
+                        <h4>Render Hours</h4>
+                        <p id="render-hours">0h / 750h</p>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -100,7 +62,7 @@
                     </div>
                     <div class="track-details">
                         <h2 id="current-title">No Track Playing</h2>
-                        <p id="current-artist">Connect Spotify to start</p>
+                        <p id="current-artist">Connect Spotify & add songs to queue</p>
                         <div class="track-stats">
                             <span class="bpm">BPM: <span id="current-bpm">--</span></span>
                             <span class="key">Key: <span id="current-key">--</span></span>
@@ -109,115 +71,85 @@
                     </div>
                 </div>
                 
-                <!-- Mix Controls -->
-                <div class="mix-controls">
-                    <button id="play-btn" class="control-btn play">▶️ PLAY</button>
+                <!-- Playback Controls -->
+                <div class="playback-controls">
+                    <button id="play-btn" class="control-btn play active">▶️ PLAY</button>
                     <button id="pause-btn" class="control-btn pause">⏸️ PAUSE</button>
-                    <button id="next-btn" class="control-btn next">⏭️ SKIP</button>
-                    <button id="mix-btn" class="control-btn mix active">🐾 MEW MIXING</button>
+                    <button id="next-btn" class="control-btn next">⏭️ NEXT</button>
                 </div>
             </div>
 
-            <!-- Crossfader & Effects -->
-            <div class="mixer-section">
-                <div class="crossfader-container">
-                    <label>🔮 MEW's Psychic Crossfader</label>
-                    <input type="range" id="crossfader" min="0" max="100" value="50" class="crossfader" disabled>
-                    <div class="crossfader-labels">
-                        <span>Current</span>
-                        <span>Next</span>
-                    </div>
-                    <p class="auto-label">✨ Automatically controlled by MEW's psychic powers</p>
-                </div>
-
-                <div class="effects-rack">
-                    <div class="effects-status">🔮 MEW applies effects automatically during transitions</div>
-                    <div class="effect-indicator" id="effect-reverb">🌊 REVERB</div>
-                    <div class="effect-indicator" id="effect-filter">🔊 FILTER</div>
-                    <div class="effect-indicator" id="effect-echo">📡 ECHO</div>
-                    <div class="effect-indicator" id="effect-drop">💥 DROPS</div>
-                </div>
-            </div>
-
-            <!-- Next Track Preview -->
-            <div class="next-track">
-                <h3>Up Next</h3>
-                <div id="next-track-info">
-                    <p>Queue empty - Add songs or let AI choose</p>
-                </div>
-                <div class="next-controls">
-                    <button id="smart-queue-btn" class="ai-btn">🧠 AI Queue</button>
-                    <button id="manual-add-btn" class="manual-btn">➕ Add Song</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Song Request Interface -->
-        <div class="request-panel">
-            <h3>🎵 Song Requests</h3>
-            <div class="request-input">
+            <!-- Search & Add Songs -->
+            <div class="search-section">
+                <h3>🔍 Search & Add Music</h3>
                 <div class="search-container">
-                    <input type="text" id="song-request" placeholder="Request a song... (e.g., 'play something energetic' or 'Levels by Avicii')" autocomplete="off">
-                    <div class="search-suggestions" id="search-suggestions"></div>
+                    <input type="text" id="song-search" placeholder="Search for songs, artists, or albums..." autocomplete="off">
+                    <div class="search-results" id="search-results"></div>
                 </div>
-                <button id="request-btn">🚀 REQUEST</button>
             </div>
-            <div class="smart-suggestions">
-                <button class="suggestion-btn" data-request="play something uplifting">⬆️ Uplifting</button>
-                <button class="suggestion-btn" data-request="drop the bass">🔥 Drop Bass</button>
-                <button class="suggestion-btn" data-request="slow it down">😌 Chill</button>
-                <button class="suggestion-btn" data-request="crowd favorite">👥 Crowd Fav</button>
+
+            <!-- Smart Queue Management -->
+            <div class="queue-section">
+                <div class="queue-header">
+                    <h3>🎵 Smart Queue</h3>
+                    <div class="queue-controls">
+                        <button id="optimize-queue-btn" class="smart-btn">🧠 Optimize Flow</button>
+                        <button id="clear-queue-btn" class="clear-btn">🗑️ Clear</button>
+                    </div>
+                </div>
+                
+                <div id="queue-stats" class="queue-stats"></div>
+                
+                <div class="queue-container">
+                    <div id="queue-list" class="queue-list">
+                        <p class="empty-queue">Queue is empty - search and add some songs!</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Music Intelligence Panel -->
+            <div class="intelligence-panel">
+                <h3>🧠 MEW's Music Intelligence</h3>
+                <div class="intelligence-info">
+                    <div class="intel-item">
+                        <strong>Beat Matching:</strong> <span>Analyzes BPM, key, and energy for perfect transitions</span>
+                    </div>
+                    <div class="intel-item">
+                        <strong>Flow Analysis:</strong> <span>Optimizes song order based on musical compatibility</span>
+                    </div>
+                    <div class="intel-item">
+                        <strong>Smart Suggestions:</strong> <span>Finds songs that flow perfectly with your queue</span>
+                    </div>
+                </div>
+                
+                <div class="compatibility-legend">
+                    <h4>🎯 Compatibility Scoring:</h4>
+                    <div class="legend-items">
+                        <span class="legend-item"><div class="compat-bar high"></div> 80%+ Perfect Flow</span>
+                        <span class="legend-item"><div class="compat-bar good"></div> 60%+ Good Match</span>
+                        <span class="legend-item"><div class="compat-bar okay"></div> 40%+ Okay Transition</span>
+                        <span class="legend-item"><div class="compat-bar poor"></div> <40% Needs Work</span>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <!-- Queue Display -->
-        <div class="queue-panel">
-            <h3>🎵 Queue</h3>
-            <div class="queue-controls">
-                <button id="clear-queue">🗑️ Clear</button>
-                <button id="shuffle-queue">🔀 Shuffle</button>
-                <select id="queue-mode">
-                    <option value="ai-smart">🧠 AI Smart Mix</option>
-                    <option value="harmonic">🎹 Harmonic Only</option>
-                    <option value="energy-flow">⚡ Energy Flow</option>
-                    <option value="manual">✋ Manual</option>
-                </select>
-            </div>
-            <div id="queue-list">
-                <p class="empty-queue">Queue is empty</p>
-            </div>
-        </div>
-
-        <!-- AI DJ Status -->
-        <div class="ai-panel">
-            <h3>🧠 MEW's Psychic Brain</h3>
-            <div class="ai-insights">
-                <div class="insight-item">
-                    <strong>Mixing Status:</strong> <span id="mixing-status">🔮 Legendary automatic mixing active</span>
-                </div>
-                <div class="insight-item">
-                    <strong>Transition Mode:</strong> <span id="transition-mode">✨ Psychic crossfading with effects</span>
-                </div>
-                <div class="insight-item">
-                    <strong>Next Action:</strong> <span id="next-action">🎵 Analyzing queue for perfect transitions</span>
-                </div>
-            </div>
-            <div class="ai-actions">
-                <button id="ai-suggest" class="ai-btn">✨ Psychic Song Suggestion</button>
-                <button id="smart-queue-btn" class="ai-btn">🧠 Generate Smart Queue</button>
-            </div>
-        </div>
-
-        <!-- Connection Panel -->
-        <div id="connection-panel" class="modal" style="display: flex;">
+        <!-- Connection Modal -->
+        <div id="connection-panel" class="modal">
             <div class="modal-content">
-                <h2>Connect to Spotify</h2>
-                <p>Connect your Spotify Premium account to unleash DJ MEW</p>
-                <button class="connect-btn" onclick="console.log('🔗 Connecting to Spotify...'); window.location.href = '/login'; return false;">🎵 Connect Spotify</button>
-                <p class="note">You need Spotify Premium for full DJ controls</p>
-                <div style="margin-top: 10px; font-size: 0.8rem; color: #a1a1aa;">
-                    🔍 Debug: <a href="/login" style="color: #c084fc; text-decoration: underline;" target="_blank">Test /login directly</a>
-                </div>
+                <h2>🔮 Connect to Spotify</h2>
+                <p>Connect your Spotify Premium account to unleash MEW's music intelligence</p>
+                <button class="connect-btn" onclick="window.location.href = '/login';">
+                    🎵 Connect Spotify
+                </button>
+                <p class="note">🎯 <strong>MEW v2.0 Features:</strong></p>
+                <ul class="features-list">
+                    <li>✨ Smart beat matching & key analysis</li>
+                    <li>🧠 Intelligent queue optimization</li>
+                    <li>📊 Real-time music compatibility scoring</li>
+                    <li>🎵 Perfect transition recommendations</li>
+                </ul>
+                <p class="note">You need Spotify Premium for playback controls</p>
             </div>
         </div>
     </div>

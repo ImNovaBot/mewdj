@@ -1,74 +1,52 @@
 const express = require('express');
+const path = require('path');
 const WebSocket = require('ws');
-const fetch = require('node-fetch');
-const cors = require('cors');
-require('dotenv').config();
 
 const app = express();
-const server = require('http').createServer(app);
-const wss = new WebSocket.Server({ server });
+const PORT = process.env.PORT || 3000;
 
-app.use(cors());
+// Environment variables
+const CLIENT_ID = process.env.SPOTIFY_CLIENT_ID;
+const CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET;
+const REDIRECT_URI = process.env.REDIRECT_URI || 'https://mewdj.onrender.com/callback';
+
+// Middleware
 app.use(express.json());
 app.use(express.static('public'));
 
-// Spotify API credentials (you'll set these in .env)
-const CLIENT_ID = process.env.SPOTIFY_CLIENT_ID;
-const CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET;
-const REDIRECT_URI = process.env.REDIRECT_URI || 'http://localhost:3000/callback';
-
-// DJ State
+// DJ State - Simple and Clean
 let djState = {
-    isPlaying: false,
     currentTrack: null,
-    nextTrack: null,
     queue: [],
+    isPlaying: false,
     accessToken: null,
-    bpm: null,
-    key: null,
-    energy: null,
-    mixingMode: 'auto' // auto, manual
+    analysisCache: new Map() // Cache song analysis to avoid repeated API calls
 };
 
-// Usage tracking
+// Usage Statistics
 let usageStats = {
-    claudeTokens: 0,
     spotifyAPICalls: 0,
+    songsAnalyzed: 0,
+    queueOptimizations: 0,
     renderHours: 0,
+    startTime: Date.now(),
     sessionsToday: 0,
-    lastReset: new Date().toDateString(),
-    startTime: Date.now()
+    lastReset: new Date().toDateString()
 };
 
-console.log('📊 Usage tracking initialized:', usageStats);
+console.log('🎵 DJ MEW v2.0 - Smart Queue Master Starting...');
+console.log('🔑 Spotify Client ID:', CLIENT_ID ? 'Configured ✅' : 'Missing ❌');
+console.log('🔗 Redirect URI:', REDIRECT_URI);
 
-// Reset daily counters
-function resetDailyCounters() {
-    const today = new Date().toDateString();
-    if (usageStats.lastReset !== today) {
-        usageStats.claudeTokens = 0;
-        usageStats.spotifyAPICalls = 0;
-        usageStats.sessionsToday = 0;
-        usageStats.lastReset = today;
-        console.log('🔄 Daily usage counters reset');
-    }
-}
-
-// Calculate render hours (rough estimate based on uptime)
-function updateRenderHours() {
-    const uptimeHours = (Date.now() - usageStats.startTime) / (1000 * 60 * 60);
-    usageStats.renderHours = uptimeHours; // Don't cap it, let UI handle the display
-    console.log(`📊 Render hours updated: ${uptimeHours.toFixed(2)}h (uptime since start)`);
-}
-
+// Spotify API Helper Class - Clean and Reliable
 class SpotifyAPI {
     constructor() {
-        this.baseUrl = 'https://api.spotify.com/v1';
         this.token = null;
+        this.baseUrl = 'https://api.spotify.com/v1';
     }
 
     async authenticate(code) {
-        console.log('🔑 Requesting Spotify access token...');
+        console.log('🔐 Authenticating with Spotify...');
         
         const response = await fetch('https://accounts.spotify.com/api/token', {
             method: 'POST',
@@ -82,48 +60,22 @@ class SpotifyAPI {
                 redirect_uri: REDIRECT_URI
             })
         });
-        
+
         if (!response.ok) {
-            const errorText = await response.text();
-            console.error('🔐 Token request failed:', response.status, errorText);
-            throw new Error(`Token request failed: ${response.status} ${errorText}`);
+            throw new Error(`Authentication failed: ${response.status}`);
         }
-        
+
         const data = await response.json();
-        
-        if (!data.access_token) {
-            console.error('🔐 No access token in response:', data);
-            throw new Error('No access token received from Spotify');
-        }
-        
         this.token = data.access_token;
         djState.accessToken = this.token;
         
-        console.log('✅ Spotify token obtained successfully');
-        return data;
-    }
-
-    async refreshToken(refreshToken) {
-        const response = await fetch('https://accounts.spotify.com/api/token', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'Authorization': 'Basic ' + Buffer.from(CLIENT_ID + ':' + CLIENT_SECRET).toString('base64')
-            },
-            body: new URLSearchParams({
-                grant_type: 'refresh_token',
-                refresh_token: refreshToken
-            })
-        });
-        
-        const data = await response.json();
-        this.token = data.access_token;
+        console.log('✅ Spotify authentication successful');
         return data;
     }
 
     async apiCall(endpoint, options = {}) {
         if (!this.token) {
-            throw new Error('No Spotify access token available. Please reconnect.');
+            throw new Error('No Spotify token available');
         }
 
         const response = await fetch(this.baseUrl + endpoint, {
@@ -134,578 +86,196 @@ class SpotifyAPI {
                 ...options.headers
             }
         });
-        
-        // Track Spotify API usage
+
+        // Track API usage
         usageStats.spotifyAPICalls++;
-        console.log(`📊 Spotify API call tracked. Total: ${usageStats.spotifyAPICalls} (${endpoint})`);
         
         if (!response.ok) {
-            console.error(`Spotify API error: ${response.status} ${response.statusText}`);
-            console.error(`Endpoint: ${endpoint}`);
-            console.error(`Token exists: ${!!this.token}`);
-            
             if (response.status === 401) {
-                // Token expired or invalid
                 this.token = null;
                 djState.accessToken = null;
-                broadcast({ 
-                    type: 'spotify-token-expired',
-                    message: 'Spotify session expired. Please reconnect.'
-                });
-                throw new Error('Spotify session expired. Please reconnect to MEW.');
+                throw new Error('Spotify token expired. Please reconnect.');
             }
-            
-            throw new Error(`Spotify API error: ${response.status} ${response.statusText}`);
+            throw new Error(`Spotify API error: ${response.status}`);
         }
-        
-        // Handle empty responses
+
         const text = await response.text();
         return text ? JSON.parse(text) : {};
     }
 
-    // Get detailed audio features for beat matching
-    async getAudioFeatures(trackId) {
-        return await this.apiCall(`/audio-features/${trackId}`);
-    }
-
-    // Get audio analysis for precise beat matching
-    async getAudioAnalysis(trackId) {
-        return await this.apiCall(`/audio-analysis/${trackId}`);
-    }
-
-    // Search for tracks
     async searchTracks(query, limit = 20) {
-        const params = new URLSearchParams({
-            q: query,
-            type: 'track',
-            limit: limit
-        });
-        return await this.apiCall(`/search?${params}`);
+        console.log(`🔍 Searching for: "${query}"`);
+        const response = await this.apiCall(`/search?q=${encodeURIComponent(query)}&type=track&limit=${limit}`);
+        return response.tracks.items;
     }
 
-    // Player controls
-    async play(trackUri = null) {
-        const body = trackUri ? { uris: [trackUri] } : {};
-        return await this.apiCall('/me/player/play', {
-            method: 'PUT',
-            body: JSON.stringify(body)
-        });
+    async getAudioFeatures(trackId) {
+        const cached = djState.analysisCache.get(trackId);
+        if (cached) {
+            console.log(`📊 Using cached analysis for ${trackId}`);
+            return cached;
+        }
+
+        console.log(`📊 Analyzing track: ${trackId}`);
+        const features = await this.apiCall(`/audio-features/${trackId}`);
+        
+        // Cache the analysis
+        djState.analysisCache.set(trackId, features);
+        usageStats.songsAnalyzed++;
+        
+        return features;
     }
 
-    async pause() {
-        return await this.apiCall('/me/player/pause', { method: 'PUT' });
+    async getMultipleAudioFeatures(trackIds) {
+        const idsString = trackIds.join(',');
+        const response = await this.apiCall(`/audio-features?ids=${idsString}`);
+        return response.audio_features;
     }
 
-    async next() {
-        return await this.apiCall('/me/player/next', { method: 'POST' });
-    }
-
-    async getCurrentlyPlaying() {
-        return await this.apiCall('/me/player/currently-playing');
-    }
-}
-
-class DJMixEngine {
-    constructor(spotifyApi) {
-        this.spotify = spotifyApi;
-        this.camelotWheel = this.buildCamelotWheel();
-    }
-
-    // Camelot wheel for harmonic mixing
-    buildCamelotWheel() {
-        return {
-            '1A': { key: 'Ab', mode: 'minor', compatibleKeys: ['1B', '2A', '12A'] },
-            '1B': { key: 'B', mode: 'major', compatibleKeys: ['1A', '2B', '12B'] },
-            '2A': { key: 'Eb', mode: 'minor', compatibleKeys: ['2B', '3A', '1A'] },
-            '2B': { key: 'Gb', mode: 'major', compatibleKeys: ['2A', '3B', '1B'] },
-            // ... (complete wheel)
-        };
-    }
-
-    // Analyze track for DJ compatibility
-    async analyzeTrack(trackId) {
-        const [features, analysis] = await Promise.all([
-            this.spotify.getAudioFeatures(trackId),
-            this.spotify.getAudioAnalysis(trackId)
-        ]);
-
-        return {
-            bpm: features.tempo,
-            key: this.convertToCamelot(features.key, features.mode),
-            energy: features.energy,
-            danceability: features.danceability,
-            valence: features.valence,
-            beats: analysis.beats,
-            sections: analysis.sections,
-            segments: analysis.segments
-        };
-    }
-
-    convertToCamelot(pitchClass, mode) {
-        const camelotMap = {
-            0: mode === 1 ? '5B' : '8A', // C
-            1: mode === 1 ? '12B' : '3A', // C#/Db
-            2: mode === 1 ? '7B' : '10A', // D
-            3: mode === 1 ? '2B' : '5A', // D#/Eb
-            4: mode === 1 ? '9B' : '12A', // E
-            5: mode === 1 ? '4B' : '7A', // F
-            6: mode === 1 ? '11B' : '2A', // F#/Gb
-            7: mode === 1 ? '6B' : '9A', // G
-            8: mode === 1 ? '1B' : '4A', // G#/Ab
-            9: mode === 1 ? '8B' : '11A', // A
-            10: mode === 1 ? '3B' : '6A', // A#/Bb
-            11: mode === 1 ? '10B' : '1A' // B
-        };
-        return camelotMap[pitchClass] || 'Unknown';
-    }
-
-    // Check if two tracks are harmonically compatible
-    areTracksCompatible(track1Key, track2Key) {
-        const wheel = this.camelotWheel;
-        return wheel[track1Key] && wheel[track1Key].compatibleKeys.includes(track2Key);
-    }
-
-    // Find the best transition point between two tracks
-    async findTransitionPoint(currentTrack, nextTrack) {
-        const currentAnalysis = await this.analyzeTrack(currentTrack.id);
-        const nextAnalysis = await this.analyzeTrack(nextTrack.id);
-
-        // Find sections where energy levels match
-        const bestTransition = {
-            outroStart: this.findOutroSection(currentAnalysis),
-            introEnd: this.findIntroSection(nextAnalysis),
-            crossfadeDuration: this.calculateCrossfadeDuration(currentAnalysis, nextAnalysis)
-        };
-
-        return bestTransition;
-    }
-
-    findOutroSection(analysis) {
-        // Find the last 32 bars or similar repetitive section
-        const sections = analysis.sections;
-        const lastSection = sections[sections.length - 1];
-        return Math.max(0, lastSection.start - 32); // 32 seconds before end
-    }
-
-    findIntroSection(analysis) {
-        // Find where the main beat kicks in (usually after intro)
-        const sections = analysis.sections;
-        return sections.find(s => s.loudness > -20)?.start || 16; // Default to 16s
-    }
-
-    calculateCrossfadeDuration(track1Analysis, track2Analysis) {
-        // Base duration on BPM compatibility
-        const bpmDiff = Math.abs(track1Analysis.bpm - track2Analysis.bpm);
-        if (bpmDiff < 5) return 8; // Quick mix
-        if (bpmDiff < 15) return 16; // Normal mix
-        return 32; // Extended mix for large BPM differences
+    async getUserInfo() {
+        return await this.apiCall('/me');
     }
 }
 
-// Initialize APIs
 const spotify = new SpotifyAPI();
-const mixEngine = new DJMixEngine(spotify);
 
-// Routes
-app.get('/login', (req, res) => {
-    console.log('🔗 Login endpoint hit from:', req.headers['user-agent']?.substring(0, 50));
-    console.log('📊 Environment check:', {
-        CLIENT_ID: CLIENT_ID ? 'Present' : 'Missing',
-        REDIRECT_URI: REDIRECT_URI,
-        NODE_ENV: process.env.NODE_ENV
-    });
+// Music Analysis & Smart Queue Management
+class SmartQueue {
+    static analyzeCompatibility(track1Features, track2Features) {
+        if (!track1Features || !track2Features) return 0;
 
-    if (!CLIENT_ID) {
-        console.error('❌ CLIENT_ID missing!');
-        return res.status(500).send('Spotify CLIENT_ID not configured');
+        let score = 0;
+        
+        // BPM compatibility (closer BPMs = higher score)
+        const bpmDiff = Math.abs(track1Features.tempo - track2Features.tempo);
+        const bpmScore = Math.max(0, 100 - (bpmDiff / 2)); // Within 2 BPM = perfect score
+        score += bpmScore * 0.3;
+
+        // Key compatibility (using circle of fifths)
+        const keyScore = this.getKeyCompatibility(track1Features.key, track2Features.key);
+        score += keyScore * 0.25;
+
+        // Energy flow (gradual changes preferred)
+        const energyDiff = Math.abs(track1Features.energy - track2Features.energy);
+        const energyScore = Math.max(0, 100 - (energyDiff * 100));
+        score += energyScore * 0.25;
+
+        // Valence (mood) compatibility
+        const valenceDiff = Math.abs(track1Features.valence - track2Features.valence);
+        const valenceScore = Math.max(0, 100 - (valenceDiff * 100));
+        score += valenceScore * 0.2;
+
+        return Math.round(score);
     }
 
-    const scopes = [
-        'user-read-playback-state',
-        'user-modify-playback-state',
-        'user-read-currently-playing',
-        'playlist-read-private',
-        'playlist-read-collaborative',
-        'streaming',
-        'user-read-email',
-        'user-read-private'
-    ].join(' ');
-
-    const authParams = {
-        response_type: 'code',
-        client_id: CLIENT_ID,
-        scope: scopes,
-        redirect_uri: REDIRECT_URI
-    };
-
-    const authUrl = 'https://accounts.spotify.com/authorize?' + new URLSearchParams(authParams);
-
-    console.log('🔗 Full Spotify auth URL:', authUrl);
-    console.log('🚀 Sending redirect response...');
-    
-    res.redirect(authUrl);
-});
-
-app.get('/callback', async (req, res) => {
-    const { code } = req.query;
-    console.log('🔐 Spotify callback received, authenticating...');
-    
-    try {
-        const tokens = await spotify.authenticate(code);
-        console.log('✅ Token received, expires in:', tokens.expires_in, 'seconds');
+    static getKeyCompatibility(key1, key2) {
+        // Simplified key compatibility (circle of fifths)
+        const keyMap = [0, 7, 2, 9, 4, 11, 6, 1, 8, 3, 10, 5]; // Circle of fifths
+        const pos1 = keyMap.indexOf(key1);
+        const pos2 = keyMap.indexOf(key2);
         
-        // Test the token immediately
-        try {
-            const userInfo = await spotify.apiCall('/me');
-            console.log(`🎵 Successfully connected as: ${userInfo.display_name}`);
-            
-            // Broadcast successful connection
-            broadcast({ 
-                type: 'spotify-connected', 
-                userInfo: userInfo 
-            });
-            
-            res.redirect(`/?authenticated=true&user=${encodeURIComponent(JSON.stringify(userInfo))}`);
-        } catch (userError) {
-            console.error('❌ Failed to fetch user info after auth:', userError);
-            res.redirect('/?authenticated=true');
-        }
-    } catch (error) {
-        console.error('❌ Authentication error:', error);
-        res.redirect(`/?error=auth_failed&detail=${encodeURIComponent(error.message)}`);
-    }
-});
-
-// DJ Control endpoints
-app.post('/api/search', async (req, res) => {
-    try {
-        const { query, limit = 20 } = req.body;
-        const results = await spotify.searchTracks(query, limit);
-        res.json(results);
-    } catch (error) {
-        console.error('Search error:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-app.post('/api/queue-track', async (req, res) => {
-    try {
-        if (!spotify.token) {
-            return res.status(401).json({ error: 'Spotify not connected. Please reconnect.' });
-        }
-
-        const { trackId } = req.body;
+        if (pos1 === -1 || pos2 === -1) return 50; // Unknown key
         
-        // Get track info first
-        const track = await spotify.apiCall(`/tracks/${trackId}`);
-        
-        // Then analyze it
-        const analysis = await mixEngine.analyzeTrack(trackId);
-        
-        djState.queue.push({
-            trackId,
-            track,
-            analysis,
-            addedAt: Date.now()
-        });
-        
-        console.log(`🎵 Added to queue: ${track.name} by ${track.artists[0].name}`);
-        
-        // Broadcast queue update
-        broadcast({ type: 'queue-updated', queue: djState.queue });
-        
-        res.json({ success: true, queue: djState.queue });
-    } catch (error) {
-        console.error('Queue track error:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-app.get('/api/state', (req, res) => {
-    res.json(djState);
-});
-
-// Get usage statistics
-app.get('/api/usage-stats', (req, res) => {
-    resetDailyCounters();
-    updateRenderHours();
-    
-    // Debug logging
-    console.log('📊 Usage Stats Request:', {
-        claudeTokens: usageStats.claudeTokens,
-        spotifyAPICalls: usageStats.spotifyAPICalls,
-        renderHours: usageStats.renderHours,
-        uptime: (Date.now() - usageStats.startTime) / (1000 * 60 * 60) // hours
-    });
-    
-    res.json({
-        claudeTokens: usageStats.claudeTokens,
-        spotifyAPICalls: usageStats.spotifyAPICalls,
-        renderHours: usageStats.renderHours,
-        sessionsToday: usageStats.sessionsToday,
-        uptime: Date.now() - usageStats.startTime
-    });
-});
-
-// Check Spotify connection status
-app.get('/api/spotify-status', async (req, res) => {
-    if (!spotify.token) {
-        return res.json({ connected: false, error: 'No token' });
+        const distance = Math.min(Math.abs(pos1 - pos2), 12 - Math.abs(pos1 - pos2));
+        return Math.max(0, 100 - (distance * 20)); // Adjacent keys = 80+ score
     }
 
-    try {
-        // Try a simple API call to check if token is valid
-        await spotify.apiCall('/me');
-        res.json({ connected: true });
-    } catch (error) {
-        console.error('Spotify status check failed:', error);
-        res.json({ connected: false, error: error.message });
-    }
-});
+    static optimizeQueue(queue) {
+        if (queue.length <= 1) return queue;
 
-// Test endpoint for song request debugging
-app.post('/api/test-song-request', async (req, res) => {
-    try {
-        console.log('🧪 Test song request endpoint hit');
-        const { request = 'Levels' } = req.body;
-        
-        console.log('🧪 Testing with request:', request);
-        
-        if (!spotify.token) {
-            return res.status(401).json({ error: 'No Spotify token' });
-        }
-        
-        // Test basic search first
-        const searchResults = await spotify.searchTracks(request, 5);
-        console.log('🧪 Search results:', searchResults.length, 'tracks found');
-        
-        // Test handleSongRequest
-        const result = await handleSongRequest(request);
-        console.log('🧪 Song request result:', result);
-        
-        res.json({ 
-            success: true, 
-            searchCount: searchResults.length,
-            result: result 
-        });
-    } catch (error) {
-        console.error('🚨 Test song request error:', error);
-        res.status(500).json({ 
-            error: error.message,
-            stack: error.stack?.split('\n').slice(0, 3)
-        });
-    }
-});
+        console.log('🧠 MEW is optimizing queue for perfect flow...');
+        usageStats.queueOptimizations++;
 
-// Test endpoint to verify tracking (dev only)
-app.post('/api/test-tracking', (req, res) => {
-    const { type } = req.body;
-    
-    switch (type) {
-        case 'claude':
-            usageStats.claudeTokens += 100;
-            console.log(`🧪 Test: Added 100 Claude tokens. Total: ${usageStats.claudeTokens}`);
-            break;
-        case 'spotify':
-            usageStats.spotifyAPICalls += 5;
-            console.log(`🧪 Test: Added 5 Spotify calls. Total: ${usageStats.spotifyAPICalls}`);
-            break;
-        case 'session':
-            usageStats.sessionsToday += 1;
-            console.log(`🧪 Test: Added session. Total: ${usageStats.sessionsToday}`);
-            break;
-    }
-    
-    // Broadcast update
-    broadcast({
-        type: 'usage-update',
-        stats: {
-            claudeTokens: usageStats.claudeTokens,
-            spotifyAPICalls: usageStats.spotifyAPICalls,
-            renderHours: usageStats.renderHours,
-            sessionsToday: usageStats.sessionsToday
-        }
-    });
-    
-    res.json({ success: true, stats: usageStats });
-});
+        // Start with first track
+        const optimized = [queue[0]];
+        const remaining = queue.slice(1);
 
-// Get current Spotify user info
-app.get('/api/spotify/me', async (req, res) => {
-    try {
-        if (!spotify.token) {
-            return res.status(401).json({ error: 'Not authenticated' });
-        }
-        
-        const userInfo = await spotify.apiCall('/me');
-        res.json(userInfo);
-    } catch (error) {
-        console.error('Error fetching user info:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
+        while (remaining.length > 0) {
+            const current = optimized[optimized.length - 1];
+            let bestMatch = remaining[0];
+            let bestScore = 0;
 
-// Sign out from Spotify
-app.post('/api/spotify/signout', (req, res) => {
-    spotify.token = null;
-    djState.accessToken = null;
-    djState.isPlaying = false;
-    djState.currentTrack = null;
-    
-    // Broadcast state update
-    broadcast({ type: 'spotify-disconnected' });
-    
-    res.json({ success: true, message: 'Signed out successfully' });
-});
-
-// Get Spotify token for Web Playback SDK
-app.get('/api/spotify-token', (req, res) => {
-    if (!spotify.token) {
-        return res.status(401).json({ error: 'Not authenticated' });
-    }
-    
-    res.json({ access_token: spotify.token });
-});
-
-// Play track on specific device (for Web Playback SDK)
-app.post('/api/play-track', async (req, res) => {
-    try {
-        const { track_id, device_id } = req.body;
-        
-        await spotify.apiCall('/me/player/play', {
-            method: 'PUT',
-            body: JSON.stringify({
-                uris: [`spotify:track:${track_id}`],
-                device_ids: [device_id]
-            })
-        });
-        
-        res.json({ success: true });
-    } catch (error) {
-        console.error('Error playing track:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// Get detailed track analysis for mixing
-app.get('/api/track-analysis/:trackId', async (req, res) => {
-    try {
-        const { trackId } = req.params;
-        
-        // Get both audio features and detailed analysis
-        const [features, analysis] = await Promise.all([
-            spotify.getAudioFeatures(trackId),
-            spotify.getAudioAnalysis(trackId)
-        ]);
-        
-        // Combine for DJ mixing
-        const mixingData = {
-            ...features,
-            beats: analysis.beats,
-            bars: analysis.bars,
-            sections: analysis.sections,
-            segments: analysis.segments,
-            // Calculate mix points
-            mixInPoint: findMixInPoint(analysis),
-            mixOutPoint: findMixOutPoint(analysis),
-            drops: findDropPoints(analysis),
-            buildUps: findBuildUps(analysis)
-        };
-        
-        res.json(mixingData);
-    } catch (error) {
-        console.error('Error analyzing track:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// WebSocket for real-time updates
-wss.on('connection', (ws) => {
-    console.log('🎧 DJ client connected');
-    
-    // Track session connection
-    usageStats.sessionsToday++;
-    console.log(`📊 Session tracked. Total today: ${usageStats.sessionsToday}`);
-    
-    // Send initial usage stats
-    setTimeout(() => {
-        ws.send(JSON.stringify({
-            type: 'usage-update',
-            stats: {
-                claudeTokens: usageStats.claudeTokens,
-                spotifyAPICalls: usageStats.spotifyAPICalls,
-                renderHours: usageStats.renderHours,
-                sessionsToday: usageStats.sessionsToday
+            // Find the best next track
+            for (const candidate of remaining) {
+                if (current.analysis && candidate.analysis) {
+                    const score = this.analyzeCompatibility(current.analysis, candidate.analysis);
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestMatch = candidate;
+                    }
+                }
             }
-        }));
-    }, 1000);
+
+            optimized.push(bestMatch);
+            remaining.splice(remaining.indexOf(bestMatch), 1);
+        }
+
+        console.log('✨ Queue optimized for perfect transitions!');
+        return optimized;
+    }
+
+    static getBPMColor(bpm) {
+        if (bpm < 100) return '#64b5f6'; // Blue - Slow
+        if (bpm < 120) return '#81c784'; // Green - Medium
+        if (bpm < 140) return '#ffb74d'; // Orange - Fast
+        return '#f06292'; // Pink - Very Fast
+    }
+
+    static getKeyName(key) {
+        const keys = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
+        return keys[key] || 'Unknown';
+    }
+}
+
+// WebSocket for Real-time Updates
+const server = app.listen(PORT, () => {
+    console.log(`🎧 DJ MEW v2.0 running on port ${PORT}`);
+});
+
+const wss = new WebSocket.Server({ server });
+
+wss.on('connection', (ws) => {
+    console.log('🎵 Client connected to DJ MEW');
+    usageStats.sessionsToday++;
     
+    // Send current state
+    ws.send(JSON.stringify({
+        type: 'state-update',
+        state: djState,
+        stats: usageStats
+    }));
+
     ws.on('message', async (message) => {
         try {
             const data = JSON.parse(message);
-            
-            // Track token usage for AI-related commands
-            if (['request-song', 'get-ai-suggestion', 'generate-smart-queue', 'ai-takeover'].includes(data.type)) {
-                trackWebSocketTokens(data.type);
-            }
-            
+            console.log('📨 Received:', data.type);
+
             switch (data.type) {
                 case 'play':
-                    await spotify.play();
                     djState.isPlaying = true;
-                    broadcast({ type: 'state-update', isPlaying: true });
+                    broadcast({ type: 'playback-update', isPlaying: true });
                     break;
                     
                 case 'pause':
-                    await spotify.pause();
                     djState.isPlaying = false;
-                    broadcast({ type: 'state-update', isPlaying: false });
+                    broadcast({ type: 'playback-update', isPlaying: false });
                     break;
                     
-                case 'request-song':
-                    try {
-                        // AI will process this and add to queue intelligently
-                        console.log('🎵 Processing song request via WebSocket:', data.request);
-                        if (!data.request) {
-                            throw new Error('No song request provided');
-                        }
-                        await handleSongRequest(data.request);
-                    } catch (error) {
-                        console.error('🚨 WebSocket request-song error:', error.message);
-                        ws.send(JSON.stringify({
-                            type: 'error',
-                            message: `Song request failed: ${error.message}`
-                        }));
+                case 'next':
+                    if (djState.queue.length > 0) {
+                        djState.currentTrack = djState.queue.shift();
+                        broadcast({ type: 'track-changed', track: djState.currentTrack });
+                        broadcast({ type: 'queue-update', queue: djState.queue });
                     }
                     break;
                     
-                case 'refresh-spotify':
-                    // Refresh Spotify connection
-                    if (spotify.token) {
-                        try {
-                            const userInfo = await spotify.apiCall('/me');
-                            ws.send(JSON.stringify({ 
-                                type: 'spotify-refreshed', 
-                                userInfo: userInfo 
-                            }));
-                        } catch (error) {
-                            ws.send(JSON.stringify({ 
-                                type: 'error', 
-                                message: 'Failed to refresh Spotify connection' 
-                            }));
-                        }
-                    }
-                    break;
-                    
-                case 'spotify-signout':
-                    spotify.token = null;
-                    djState.accessToken = null;
-                    djState.isPlaying = false;
-                    djState.currentTrack = null;
-                    broadcast({ type: 'spotify-disconnected' });
+                case 'optimize-queue':
+                    djState.queue = SmartQueue.optimizeQueue(djState.queue);
+                    broadcast({ type: 'queue-optimized', queue: djState.queue });
                     break;
             }
         } catch (error) {
+            console.error('WebSocket error:', error);
             ws.send(JSON.stringify({ type: 'error', message: error.message }));
         }
     });
@@ -719,341 +289,181 @@ function broadcast(message) {
     });
 }
 
-// AI Song Request Handler
-async function handleSongRequest(request) {
-    console.log('🎵 Processing song request:', request);
+// Routes - Clean and Simple
+
+// Spotify Authentication
+app.get('/login', (req, res) => {
+    const scopes = [
+        'user-read-playback-state',
+        'user-modify-playback-state',
+        'user-read-currently-playing',
+        'playlist-read-private',
+        'streaming',
+        'user-read-email',
+        'user-read-private'
+    ].join(' ');
+
+    const authUrl = 'https://accounts.spotify.com/authorize?' +
+        new URLSearchParams({
+            response_type: 'code',
+            client_id: CLIENT_ID,
+            scope: scopes,
+            redirect_uri: REDIRECT_URI
+        });
+
+    console.log('🔗 Redirecting to Spotify login');
+    res.redirect(authUrl);
+});
+
+app.get('/callback', async (req, res) => {
+    const { code } = req.query;
     
     try {
-        // Track Claude token usage for AI processing (estimated)
-        const tokenUsage = estimateTokenUsage(request);
-        usageStats.claudeTokens += tokenUsage;
-        console.log(`📊 Claude tokens tracked: +${tokenUsage}, Total: ${usageStats.claudeTokens}`);
+        await spotify.authenticate(code);
+        const userInfo = await spotify.getUserInfo();
         
-        // Check if it's a natural language request vs specific song
-        const isNaturalLanguage = /^(play something|give me|i want|mood|feel like|vibe)/i.test(request.trim());
+        console.log(`🎵 User connected: ${userInfo.display_name}`);
         
-        let searchQuery = request;
-        
-        if (isNaturalLanguage) {
-            // Process natural language requests
-            searchQuery = await processNaturalLanguageRequest(request);
-            console.log(`Natural language request "${request}" -> search query: "${searchQuery}"`);
-        }
-        
-        // Search for the song
-        const results = await spotify.searchTracks(searchQuery, 5);
-        
-        if (results.tracks && results.tracks.items && results.tracks.items.length > 0) {
-            // For natural language requests, pick based on energy/mood
-            let selectedTrack;
-            
-            if (isNaturalLanguage) {
-                selectedTrack = await selectTrackByMood(results.tracks.items, request);
-            } else {
-                selectedTrack = results.tracks.items[0]; // First result for specific searches
-            }
-            
-            // Analyze the track for DJ mixing
-            const analysis = await mixEngine.analyzeTrack(selectedTrack.id);
-            
-            djState.queue.push({
-                trackId: selectedTrack.id,
-                track: selectedTrack,
-                analysis,
-                addedAt: Date.now(),
-                requestedBy: 'user',
-                request: request,
-                originalRequest: request
-            });
-            
-            const message = isNaturalLanguage ? 
-                `🧠 Found perfect match: "${selectedTrack.name}" by ${selectedTrack.artists[0].name}` :
-                `🎵 Added "${selectedTrack.name}" by ${selectedTrack.artists[0].name} to queue`;
-            
-            broadcast({ 
-                type: 'song-queued', 
-                track: selectedTrack,
-                message: message
-            });
-            
-        } else {
-            broadcast({ 
-                type: 'error', 
-                message: `No tracks found for "${request}". Try a different search!`
-            });
-        }
-        
+        res.redirect(`/?authenticated=true&user=${encodeURIComponent(JSON.stringify(userInfo))}`);
     } catch (error) {
-        console.error('🚨 Error handling song request:', {
-            error: error.message,
-            stack: error.stack?.split('\n').slice(0, 3),
-            request: request,
-            spotifyToken: !!spotify.token
-        });
-        broadcast({ 
-            type: 'error', 
-            message: `Failed to process request: ${error.message}. Check server logs for details.`
-        });
-        throw error; // Re-throw so the HTTP handler can return 500
+        console.error('Authentication error:', error);
+        res.redirect(`/?error=auth_failed&detail=${encodeURIComponent(error.message)}`);
     }
-}
-
-// Process natural language requests into search queries
-async function processNaturalLanguageRequest(request) {
-    const requestLower = request.toLowerCase();
-    
-    // Mood-based mapping
-    const moodMappings = {
-        'energetic': 'high energy electronic dance music',
-        'uplifting': 'uplifting happy pop music',
-        'chill': 'chill ambient electronic music',
-        'party': 'party dance electronic hits',
-        'sad': 'sad emotional ballad',
-        'romantic': 'romantic love songs',
-        'workout': 'workout motivation electronic',
-        'relaxing': 'relaxing ambient chill music',
-        'happy': 'happy upbeat pop music',
-        'intense': 'intense electronic dubstep',
-        'classic': 'classic rock hits',
-        'hip hop': 'hip hop rap music',
-        'electronic': 'electronic dance music EDM',
-        'pop': 'popular pop hits'
-    };
-    
-    // Check for mood keywords
-    for (const [mood, searchTerm] of Object.entries(moodMappings)) {
-        if (requestLower.includes(mood)) {
-            return searchTerm;
-        }
-    }
-    
-    // Genre extraction
-    const genres = ['rock', 'pop', 'hip hop', 'rap', 'electronic', 'edm', 'house', 'techno', 'dubstep', 'jazz', 'classical', 'country', 'r&b', 'funk', 'reggae'];
-    for (const genre of genres) {
-        if (requestLower.includes(genre)) {
-            return `${genre} music hits`;
-        }
-    }
-    
-    // Time-based requests
-    if (requestLower.includes('90s') || requestLower.includes('nineties')) return '90s hits music';
-    if (requestLower.includes('2000s') || requestLower.includes('2000')) return '2000s pop hits';
-    if (requestLower.includes('80s') || requestLower.includes('eighties')) return '80s classic hits';
-    
-    // Default fallback - extract meaningful words
-    const meaningfulWords = request.split(' ').filter(word => 
-        word.length > 2 && 
-        !['play', 'something', 'give', 'me', 'want', 'like', 'the', 'and', 'with'].includes(word.toLowerCase())
-    ).join(' ');
-    
-    return meaningfulWords || 'popular music hits';
-}
-
-// Select best track based on mood/request
-async function selectTrackByMood(tracks, originalRequest) {
-    const requestLower = originalRequest.toLowerCase();
-    
-    // Get audio features for all tracks to make smart selection
-    const tracksWithFeatures = [];
-    
-    for (const track of tracks.slice(0, 3)) { // Analyze top 3 results
-        try {
-            const features = await spotify.getAudioFeatures(track.id);
-            tracksWithFeatures.push({ track, features });
-        } catch (error) {
-            console.error('Failed to get audio features for', track.name, error);
-            tracksWithFeatures.push({ track, features: null });
-        }
-    }
-    
-    // Score tracks based on request
-    let bestTrack = tracksWithFeatures[0];
-    let bestScore = 0;
-    
-    for (const { track, features } of tracksWithFeatures) {
-        let score = 0;
-        
-        if (!features) {
-            score = Math.random(); // Random score if no features available
-        } else {
-            // Score based on energy and valence for different moods
-            if (requestLower.includes('energetic') || requestLower.includes('party')) {
-                score += features.energy * 2 + features.danceability;
-            }
-            
-            if (requestLower.includes('happy') || requestLower.includes('uplifting')) {
-                score += features.valence * 2 + features.energy;
-            }
-            
-            if (requestLower.includes('chill') || requestLower.includes('relaxing')) {
-                score += (1 - features.energy) + (features.valence * 0.5);
-            }
-            
-            if (requestLower.includes('sad')) {
-                score += (1 - features.valence) * 2;
-            }
-            
-            if (requestLower.includes('workout') || requestLower.includes('intense')) {
-                score += features.energy * 2 + features.loudness / 10;
-            }
-            
-            // Bonus for higher popularity
-            score += (track.popularity / 100) * 0.5;
-        }
-        
-        if (score > bestScore) {
-            bestScore = score;
-            bestTrack = { track, features };
-        }
-    }
-    
-    return bestTrack.track;
-}
-
-// Estimate token usage for different operations
-function estimateTokenUsage(request) {
-    const requestLength = request.length;
-    
-    // Rough estimates based on request complexity
-    if (requestLength < 20) return 50; // Simple requests
-    if (requestLength < 100) return 150; // Medium requests
-    return 300; // Complex natural language requests
-}
-
-// Track WebSocket message token usage
-function trackWebSocketTokens(messageType) {
-    const tokenEstimates = {
-        'request-song': 200,
-        'get-ai-suggestion': 300,
-        'generate-smart-queue': 400,
-        'ai-takeover': 100,
-        'default': 50
-    };
-    
-    const tokens = tokenEstimates[messageType] || tokenEstimates.default;
-    usageStats.claudeTokens += tokens;
-    console.log(`📊 WebSocket Claude tokens tracked: +${tokens} for ${messageType}, Total: ${usageStats.claudeTokens}`);
-}
-
-// Find optimal mix-in point for incoming track
-function findMixInPoint(analysis) {
-    const bars = analysis.bars;
-    if (!bars || bars.length < 16) return 16; // Default 16 seconds
-    
-    // Look for the start of the main section (usually after intro)
-    const sections = analysis.sections || [];
-    const mainSection = sections.find(section => 
-        section.loudness > -15 && section.duration > 30
-    );
-    
-    if (mainSection) {
-        // Find nearest bar to main section start
-        const nearestBar = bars.find(bar => bar.start >= mainSection.start);
-        return nearestBar ? nearestBar.start : mainSection.start;
-    }
-    
-    // Fallback: 16 bars in (assuming 4/4 time at 128 BPM ≈ 30 seconds)
-    return bars[Math.min(15, bars.length - 1)].start;
-}
-
-// Find optimal mix-out point for outgoing track
-function findMixOutPoint(analysis) {
-    const bars = analysis.bars;
-    const duration = analysis.track.duration;
-    
-    if (!bars || bars.length < 32) return duration * 0.8; // Default 80% through
-    
-    // Look for outro section or fade section
-    const sections = analysis.sections || [];
-    const outroSection = sections.reverse().find(section => 
-        section.loudness < -10 || section.start > duration * 0.7
-    );
-    
-    if (outroSection) {
-        // Find nearest bar before outro
-        const nearestBar = bars.reverse().find(bar => bar.start <= outroSection.start);
-        return nearestBar ? nearestBar.start : outroSection.start;
-    }
-    
-    // Fallback: 32 bars from end
-    const barsFromEnd = Math.min(32, bars.length);
-    return bars[bars.length - barsFromEnd].start;
-}
-
-// Find drop points (energy increases) for dramatic mixing
-function findDropPoints(analysis) {
-    const sections = analysis.sections || [];
-    const drops = [];
-    
-    for (let i = 1; i < sections.length; i++) {
-        const prev = sections[i - 1];
-        const curr = sections[i];
-        
-        // Look for significant energy/loudness increase
-        const energyIncrease = curr.loudness - prev.loudness;
-        const tempoChange = Math.abs(curr.tempo - prev.tempo);
-        
-        if (energyIncrease > 5 || tempoChange > 10) {
-            drops.push({
-                time: curr.start,
-                intensity: energyIncrease,
-                type: energyIncrease > 10 ? 'hard_drop' : 'soft_drop',
-                tempo: curr.tempo
-            });
-        }
-    }
-    
-    return drops;
-}
-
-// Find build-up sections for tension before drops
-function findBuildUps(analysis) {
-    const segments = analysis.segments || [];
-    const buildUps = [];
-    
-    // Look for gradual energy increases over 8-16 segments
-    for (let i = 0; i < segments.length - 8; i++) {
-        const window = segments.slice(i, i + 8);
-        let energyTrend = 0;
-        
-        for (let j = 1; j < window.length; j++) {
-            if (window[j].loudness > window[j-1].loudness) energyTrend++;
-        }
-        
-        // If 6+ segments show increasing energy
-        if (energyTrend >= 6) {
-            buildUps.push({
-                start: window[0].start,
-                end: window[window.length - 1].start,
-                intensity: energyTrend / window.length,
-                duration: window[window.length - 1].start - window[0].start
-            });
-        }
-    }
-    
-    return buildUps;
-}
-
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-    console.log(`🐾 DJ MEW Server running on port ${PORT}`);
-    console.log(`🔗 Connect Spotify: http://localhost:${PORT}/login`);
-    console.log(`✨ Legendary psychic mixing powers: ONLINE`);
-    
-    // Initialize usage tracking
-    resetDailyCounters();
-    
-    // Broadcast usage stats every 60 seconds
-    setInterval(() => {
-        updateRenderHours();
-        broadcast({
-            type: 'usage-update',
-            stats: {
-                claudeTokens: usageStats.claudeTokens,
-                spotifyAPICalls: usageStats.spotifyAPICalls,
-                renderHours: usageStats.renderHours,
-                sessionsToday: usageStats.sessionsToday
-            }
-        });
-    }, 60000);
 });
+
+// API Endpoints - Simple and Reliable
+
+// Search for tracks
+app.post('/api/search', async (req, res) => {
+    try {
+        const { query, limit = 20 } = req.body;
+        const tracks = await spotify.searchTracks(query, limit);
+        
+        // Add simplified info for frontend
+        const results = tracks.map(track => ({
+            id: track.id,
+            name: track.name,
+            artist: track.artists[0]?.name,
+            album: track.album.name,
+            image: track.album.images[0]?.url,
+            duration: track.duration_ms,
+            preview_url: track.preview_url
+        }));
+        
+        res.json(results);
+    } catch (error) {
+        console.error('Search error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Add track to queue with analysis
+app.post('/api/add-to-queue', async (req, res) => {
+    try {
+        const { track } = req.body;
+        
+        // Get audio analysis for the track
+        const analysis = await spotify.getAudioFeatures(track.id);
+        
+        const queueItem = {
+            ...track,
+            analysis,
+            bpm: Math.round(analysis.tempo),
+            key: SmartQueue.getKeyName(analysis.key),
+            energy: Math.round(analysis.energy * 100),
+            valence: Math.round(analysis.valence * 100),
+            addedAt: Date.now()
+        };
+        
+        djState.queue.push(queueItem);
+        
+        console.log(`➕ Added to queue: ${track.name} (${queueItem.bpm} BPM, ${queueItem.key} key)`);
+        
+        // Broadcast update
+        broadcast({ type: 'queue-update', queue: djState.queue });
+        
+        res.json({ success: true, item: queueItem, queueLength: djState.queue.length });
+    } catch (error) {
+        console.error('Add to queue error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Optimize queue order
+app.post('/api/optimize-queue', async (req, res) => {
+    try {
+        if (djState.queue.length <= 1) {
+            return res.json({ message: 'Queue too short to optimize', queue: djState.queue });
+        }
+        
+        const originalOrder = djState.queue.map(track => track.name);
+        djState.queue = SmartQueue.optimizeQueue(djState.queue);
+        const newOrder = djState.queue.map(track => track.name);
+        
+        console.log('🧠 Queue optimization complete');
+        console.log('Before:', originalOrder);
+        console.log('After:', newOrder);
+        
+        broadcast({ type: 'queue-optimized', queue: djState.queue });
+        
+        res.json({ 
+            success: true, 
+            message: 'MEW optimized your queue for perfect flow!',
+            queue: djState.queue 
+        });
+    } catch (error) {
+        console.error('Queue optimization error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Clear queue
+app.post('/api/clear-queue', (req, res) => {
+    djState.queue = [];
+    broadcast({ type: 'queue-update', queue: djState.queue });
+    res.json({ success: true });
+});
+
+// Get current state
+app.get('/api/state', (req, res) => {
+    res.json({
+        ...djState,
+        stats: usageStats
+    });
+});
+
+// Get usage statistics
+app.get('/api/usage-stats', (req, res) => {
+    // Update render hours
+    const uptimeHours = (Date.now() - usageStats.startTime) / (1000 * 60 * 60);
+    usageStats.renderHours = uptimeHours;
+    
+    res.json(usageStats);
+});
+
+// User info
+app.get('/api/user', async (req, res) => {
+    try {
+        if (!spotify.token) {
+            return res.status(401).json({ error: 'Not authenticated' });
+        }
+        
+        const userInfo = await spotify.getUserInfo();
+        res.json(userInfo);
+    } catch (error) {
+        console.error('User info error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Spotify token for Web Playback SDK
+app.get('/api/spotify-token', (req, res) => {
+    if (!spotify.token) {
+        return res.status(401).json({ error: 'No token available' });
+    }
+    res.json({ access_token: spotify.token });
+});
+
+console.log('🔮 DJ MEW v2.0 - Smart Queue Master ready!');
+console.log('✨ Features: Smart search, beat matching, intelligent queue optimization');
+console.log('🎯 Focus: Reliability, music intelligence, perfect transitions');
