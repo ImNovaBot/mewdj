@@ -3,6 +3,7 @@ class AIdjPro {
         this.ws = null;
         this.isConnected = false;
         this.currentTrack = null;
+        this.nextTrack = null;
         this.queue = [];
         this.isPlaying = false;
         this.usageStats = {
@@ -12,10 +13,30 @@ class AIdjPro {
             sessionStart: Date.now()
         };
         
+        // Web Audio mixing
+        this.audioContext = null;
+        this.player = null;
+        this.deviceId = null;
+        this.currentSource = null;
+        this.nextSource = null;
+        this.crossfader = 0.5;
+        this.autoMixEnabled = true;
+        this.mixingInProgress = false;
+        
+        // Effects
+        this.effects = {
+            reverb: null,
+            filter: null,
+            echo: null,
+            masterGain: null
+        };
+        
         this.initWebSocket();
         this.initEventListeners();
         this.checkAuthStatus();
         this.initResourceMonitoring();
+        this.initWebAudio();
+        this.initSpotifyPlayer();
     }
 
     initWebSocket() {
@@ -108,22 +129,19 @@ class AIdjPro {
         });
         
         document.getElementById('mix-btn').addEventListener('click', () => {
-            this.toggleAutoMix();
+            this.showNotification('🔮 MEW is always in control! Legendary mixing is automatic.');
         });
 
         // Search functionality
         this.initSearchFeatures();
 
-        // Effects
-        document.querySelectorAll('.effect-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                this.toggleEffect(btn.dataset.effect);
-            });
-        });
-
-        // Crossfader
+        // Crossfader (automatic, but show feedback)
         document.getElementById('crossfader').addEventListener('input', (e) => {
-            this.updateCrossfader(e.target.value);
+            this.showNotification('🔮 MEW controls the crossfader with psychic precision!');
+            // Reset to center since MEW controls it
+            setTimeout(() => {
+                e.target.value = 50;
+            }, 1000);
         });
 
         // Song requests
@@ -445,22 +463,7 @@ class AIdjPro {
         this.sendCommand('remove-from-queue', { index });
     }
 
-    enableAITakeover() {
-        const takeoverBtn = document.getElementById('ai-takeover');
-        const isActive = takeoverBtn.classList.contains('active');
-        
-        if (isActive) {
-            takeoverBtn.classList.remove('active');
-            takeoverBtn.textContent = '🔮 MEW Take Control';
-            this.sendCommand('ai-takeover', { enabled: false });
-            this.showNotification('🤲 Manual control resumed');
-        } else {
-            takeoverBtn.classList.add('active');
-            takeoverBtn.textContent = '🐾 MEW IN CONTROL';
-            this.sendCommand('ai-takeover', { enabled: true });
-            this.showNotification('🔮 MEW has taken control with psychic powers!');
-        }
-    }
+    // Remove old takeover function since MEW is always in control
 
     getAISuggestion() {
         this.trackClaudeUsage(300); // Estimate for AI suggestion
@@ -818,6 +821,344 @@ class AIdjPro {
     trackSpotifyAPI() {
         this.usageStats.spotifyAPICalls += 1;
         this.updateResourceDashboard();
+    }
+
+    initWebAudio() {
+        try {
+            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            this.setupAudioEffects();
+        } catch (error) {
+            console.error('Web Audio not supported:', error);
+        }
+    }
+
+    setupAudioEffects() {
+        // Master gain for overall volume control
+        this.effects.masterGain = this.audioContext.createGain();
+        this.effects.masterGain.connect(this.audioContext.destination);
+
+        // Reverb effect
+        this.effects.reverb = this.audioContext.createConvolver();
+        this.createReverbBuffer();
+
+        // Filter effect (low/high pass)
+        this.effects.filter = this.audioContext.createBiquadFilter();
+        this.effects.filter.type = 'allpass';
+        this.effects.filter.frequency.value = 1000;
+
+        // Echo/Delay effect
+        this.effects.echo = this.audioContext.createDelay();
+        this.effects.echo.delayTime.value = 0.3;
+        const echoGain = this.audioContext.createGain();
+        echoGain.gain.value = 0.3;
+
+        // Connect effects chain
+        this.effects.echo.connect(echoGain);
+        echoGain.connect(this.effects.echo);
+        this.effects.echo.connect(this.effects.filter);
+        this.effects.filter.connect(this.effects.reverb);
+        this.effects.reverb.connect(this.effects.masterGain);
+    }
+
+    createReverbBuffer() {
+        const sampleRate = this.audioContext.sampleRate;
+        const length = sampleRate * 2; // 2 seconds of reverb
+        const impulse = this.audioContext.createBuffer(2, length, sampleRate);
+
+        for (let channel = 0; channel < 2; channel++) {
+            const channelData = impulse.getChannelData(channel);
+            for (let i = 0; i < length; i++) {
+                channelData[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, 2);
+            }
+        }
+
+        this.effects.reverb.buffer = impulse;
+    }
+
+    initSpotifyPlayer() {
+        window.onSpotifyWebPlaybackSDKReady = () => {
+            this.player = new Spotify.Player({
+                name: 'DJ MEW - Legendary Mixer',
+                getOAuthToken: (cb) => {
+                    // Get token from server
+                    fetch('/api/spotify-token')
+                        .then(response => response.json())
+                        .then(data => cb(data.access_token))
+                        .catch(error => console.error('Error getting token:', error));
+                },
+                volume: 0.8
+            });
+
+            // Error handling
+            this.player.addListener('initialization_error', ({ message }) => {
+                console.error('Failed to initialize player:', message);
+            });
+
+            this.player.addListener('authentication_error', ({ message }) => {
+                console.error('Authentication error:', message);
+            });
+
+            this.player.addListener('account_error', ({ message }) => {
+                console.error('Account error:', message);
+            });
+
+            // Ready
+            this.player.addListener('ready', ({ device_id }) => {
+                console.log('🎧 DJ MEW player ready with device ID:', device_id);
+                this.deviceId = device_id;
+                this.showNotification('🔮 MEW\'s legendary mixing powers activated!');
+                
+                // Automatically start mixing when player is ready
+                this.startAutomaticMixing();
+            });
+
+            // Not ready
+            this.player.addListener('not_ready', ({ device_id }) => {
+                console.log('Device went offline:', device_id);
+            });
+
+            // Player state changes
+            this.player.addListener('player_state_changed', (state) => {
+                if (!state) return;
+
+                this.handlePlayerStateChange(state);
+                
+                // Auto-mix when track is about to end
+                if (this.autoMixEnabled && this.shouldStartNextTrack(state)) {
+                    this.performAutomaticTransition();
+                }
+            });
+
+            // Connect the player
+            this.player.connect().then(success => {
+                if (success) {
+                    console.log('🔮 Successfully connected to Spotify Web Playback SDK');
+                } else {
+                    console.error('❌ Failed to connect to Spotify Web Playback SDK');
+                }
+            });
+        };
+    }
+
+    handlePlayerStateChange(state) {
+        const track = state.track_window.current_track;
+        
+        if (track && track.id !== this.currentTrack?.id) {
+            this.currentTrack = track;
+            this.updateNowPlaying(track);
+            
+            // Analyze track for mixing
+            this.analyzeCurrentTrack(track.id);
+        }
+
+        this.isPlaying = !state.paused;
+        this.updatePlaybackControls();
+    }
+
+    shouldStartNextTrack(state) {
+        // Start next track when 30 seconds remaining
+        const remaining = state.duration - state.position;
+        return remaining < 30000 && this.queue.length > 0;
+    }
+
+    async performAutomaticTransition() {
+        if (this.mixingInProgress || this.queue.length === 0) return;
+        
+        this.mixingInProgress = true;
+        
+        const nextTrack = this.queue[0];
+        this.showNotification(`🔮 MEW senses the perfect moment... transitioning to "${nextTrack.track?.name}"`);
+
+        // Update status
+        document.getElementById('next-action').textContent = `🎵 Transitioning to ${nextTrack.track?.name}`;
+        
+        try {
+            // Get track analysis for perfect mixing
+            const analysis = await this.getTrackMixingData(nextTrack.trackId);
+            
+            // Calculate perfect transition timing
+            const transitionDuration = this.calculateTransitionDuration(analysis);
+            
+            this.showNotification(`✨ Analyzing harmonics... ${transitionDuration/1000}s psychic crossfade incoming`);
+            
+            // Start crossfade transition
+            await this.executeAutomaticCrossfade(nextTrack, transitionDuration);
+            
+            // Update queue
+            this.queue.shift();
+            this.updateQueue(this.queue);
+            
+            this.showNotification(`🎵 Legendary transition complete! "${nextTrack.track?.name}" now playing`);
+            document.getElementById('next-action').textContent = '🧠 Analyzing next transition opportunity';
+            
+        } catch (error) {
+            console.error('Transition error:', error);
+            this.showNotification('⚠️ Psychic interference detected, using backup transition');
+            this.playNextTrackDirect();
+        }
+        
+        this.mixingInProgress = false;
+    }
+
+    async executeAutomaticCrossfade(nextTrack, duration) {
+        // Show MEW controlling the crossfader
+        this.animateCrossfader(duration);
+        
+        // Apply echo/reverb to current track
+        this.applyTransitionEffects('out');
+        
+        // Wait for effect buildup
+        await this.sleep(2000);
+        
+        // Play next track
+        await this.playTrackOnDevice(nextTrack.trackId);
+        
+        // Apply intro effects to new track
+        this.applyTransitionEffects('in');
+        
+        // Clear effects after transition
+        setTimeout(() => {
+            this.clearAllEffects();
+        }, duration);
+    }
+
+    animateCrossfader(duration) {
+        const crossfader = document.getElementById('crossfader');
+        const steps = 20;
+        const stepTime = duration / steps;
+        
+        let currentStep = 0;
+        
+        const animate = () => {
+            if (currentStep >= steps) {
+                crossfader.value = 50; // Return to center
+                return;
+            }
+            
+            // Create smooth transition curve
+            const progress = currentStep / steps;
+            const value = 50 + (Math.sin(progress * Math.PI) * 40); // Smooth curve from 50 to 90 and back
+            crossfader.value = value;
+            
+            currentStep++;
+            setTimeout(animate, stepTime);
+        };
+        
+        animate();
+    }
+
+    applyTransitionEffects(direction) {
+        if (direction === 'out') {
+            // Outgoing track effects
+            this.effects.echo.delayTime.value = 0.125; // 1/8 note echo
+            this.effects.filter.type = 'highpass';
+            this.effects.filter.frequency.value = 800;
+            
+            // Show effects in UI
+            this.showEffectActive('echo');
+            this.showEffectActive('filter');
+            
+        } else {
+            // Incoming track effects
+            this.effects.filter.type = 'lowpass';
+            this.effects.filter.frequency.value = 2000;
+            
+            this.showEffectActive('filter');
+            
+            // Gradually remove filter
+            setTimeout(() => {
+                this.effects.filter.type = 'allpass';
+                this.hideEffectActive('filter');
+            }, 4000);
+        }
+    }
+
+    showEffectActive(effectName) {
+        const indicator = document.getElementById(`effect-${effectName}`);
+        if (indicator) {
+            indicator.classList.add('active');
+        }
+    }
+
+    hideEffectActive(effectName) {
+        const indicator = document.getElementById(`effect-${effectName}`);
+        if (indicator) {
+            indicator.classList.remove('active');
+        }
+    }
+
+    clearAllEffects() {
+        this.effects.filter.type = 'allpass';
+        this.effects.filter.frequency.value = 1000;
+        this.effects.echo.delayTime.value = 0;
+        
+        // Hide all effect indicators
+        ['reverb', 'filter', 'echo', 'drop'].forEach(effect => {
+            this.hideEffectActive(effect);
+        });
+    }
+
+    async playTrackOnDevice(trackId) {
+        if (!this.deviceId) return;
+
+        const response = await fetch('/api/play-track', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                track_id: trackId,
+                device_id: this.deviceId
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to play track on device');
+        }
+    }
+
+    async getTrackMixingData(trackId) {
+        const response = await fetch(`/api/track-analysis/${trackId}`);
+        if (!response.ok) {
+            throw new Error('Failed to get track analysis');
+        }
+        return await response.json();
+    }
+
+    calculateTransitionDuration(analysis) {
+        // Calculate based on BPM and energy
+        const bpm = analysis.tempo || 128;
+        const energy = analysis.energy || 0.5;
+        
+        // Higher energy = shorter transitions
+        const baseDuration = energy > 0.7 ? 8000 : 16000;
+        
+        // Sync to beat (assuming 4/4 time)
+        const beatDuration = (60 / bpm) * 1000;
+        const bars = Math.round(baseDuration / (beatDuration * 4));
+        
+        return bars * beatDuration * 4;
+    }
+
+    startAutomaticMixing() {
+        // Enable auto-mix by default
+        this.autoMixEnabled = true;
+        document.getElementById('mix-btn').classList.add('active');
+        document.getElementById('mix-btn').textContent = '🐾 MEW MIXING';
+        
+        this.showNotification('🔮 Legendary automatic mixing enabled! MEW will handle everything.');
+    }
+
+    sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    playNextTrackDirect() {
+        if (this.queue.length > 0) {
+            const nextTrack = this.queue.shift();
+            this.playTrackOnDevice(nextTrack.trackId);
+            this.updateQueue(this.queue);
+        }
     }
 
     showManualAddDialog() {

@@ -383,6 +383,67 @@ app.post('/api/spotify/signout', (req, res) => {
     res.json({ success: true, message: 'Signed out successfully' });
 });
 
+// Get Spotify token for Web Playback SDK
+app.get('/api/spotify-token', (req, res) => {
+    if (!spotify.token) {
+        return res.status(401).json({ error: 'Not authenticated' });
+    }
+    
+    res.json({ access_token: spotify.token });
+});
+
+// Play track on specific device (for Web Playback SDK)
+app.post('/api/play-track', async (req, res) => {
+    try {
+        const { track_id, device_id } = req.body;
+        
+        await spotify.apiCall('/me/player/play', {
+            method: 'PUT',
+            body: JSON.stringify({
+                uris: [`spotify:track:${track_id}`],
+                device_ids: [device_id]
+            })
+        });
+        
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error playing track:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get detailed track analysis for mixing
+app.get('/api/track-analysis/:trackId', async (req, res) => {
+    try {
+        const { trackId } = req.params;
+        
+        // Get both audio features and detailed analysis
+        const [features, analysis] = await Promise.all([
+            spotify.getAudioFeatures(trackId),
+            spotify.getAudioAnalysis(trackId)
+        ]);
+        
+        // Combine for DJ mixing
+        const mixingData = {
+            ...features,
+            beats: analysis.beats,
+            bars: analysis.bars,
+            sections: analysis.sections,
+            segments: analysis.segments,
+            // Calculate mix points
+            mixInPoint: findMixInPoint(analysis),
+            mixOutPoint: findMixOutPoint(analysis),
+            drops: findDropPoints(analysis),
+            buildUps: findBuildUps(analysis)
+        };
+        
+        res.json(mixingData);
+    } catch (error) {
+        console.error('Error analyzing track:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // WebSocket for real-time updates
 wss.on('connection', (ws) => {
     console.log('DJ client connected');
@@ -658,6 +719,105 @@ function trackWebSocketTokens(messageType) {
     };
     
     usageStats.claudeTokens += tokenEstimates[messageType] || tokenEstimates.default;
+}
+
+// Find optimal mix-in point for incoming track
+function findMixInPoint(analysis) {
+    const bars = analysis.bars;
+    if (!bars || bars.length < 16) return 16; // Default 16 seconds
+    
+    // Look for the start of the main section (usually after intro)
+    const sections = analysis.sections || [];
+    const mainSection = sections.find(section => 
+        section.loudness > -15 && section.duration > 30
+    );
+    
+    if (mainSection) {
+        // Find nearest bar to main section start
+        const nearestBar = bars.find(bar => bar.start >= mainSection.start);
+        return nearestBar ? nearestBar.start : mainSection.start;
+    }
+    
+    // Fallback: 16 bars in (assuming 4/4 time at 128 BPM ≈ 30 seconds)
+    return bars[Math.min(15, bars.length - 1)].start;
+}
+
+// Find optimal mix-out point for outgoing track
+function findMixOutPoint(analysis) {
+    const bars = analysis.bars;
+    const duration = analysis.track.duration;
+    
+    if (!bars || bars.length < 32) return duration * 0.8; // Default 80% through
+    
+    // Look for outro section or fade section
+    const sections = analysis.sections || [];
+    const outroSection = sections.reverse().find(section => 
+        section.loudness < -10 || section.start > duration * 0.7
+    );
+    
+    if (outroSection) {
+        // Find nearest bar before outro
+        const nearestBar = bars.reverse().find(bar => bar.start <= outroSection.start);
+        return nearestBar ? nearestBar.start : outroSection.start;
+    }
+    
+    // Fallback: 32 bars from end
+    const barsFromEnd = Math.min(32, bars.length);
+    return bars[bars.length - barsFromEnd].start;
+}
+
+// Find drop points (energy increases) for dramatic mixing
+function findDropPoints(analysis) {
+    const sections = analysis.sections || [];
+    const drops = [];
+    
+    for (let i = 1; i < sections.length; i++) {
+        const prev = sections[i - 1];
+        const curr = sections[i];
+        
+        // Look for significant energy/loudness increase
+        const energyIncrease = curr.loudness - prev.loudness;
+        const tempoChange = Math.abs(curr.tempo - prev.tempo);
+        
+        if (energyIncrease > 5 || tempoChange > 10) {
+            drops.push({
+                time: curr.start,
+                intensity: energyIncrease,
+                type: energyIncrease > 10 ? 'hard_drop' : 'soft_drop',
+                tempo: curr.tempo
+            });
+        }
+    }
+    
+    return drops;
+}
+
+// Find build-up sections for tension before drops
+function findBuildUps(analysis) {
+    const segments = analysis.segments || [];
+    const buildUps = [];
+    
+    // Look for gradual energy increases over 8-16 segments
+    for (let i = 0; i < segments.length - 8; i++) {
+        const window = segments.slice(i, i + 8);
+        let energyTrend = 0;
+        
+        for (let j = 1; j < window.length; j++) {
+            if (window[j].loudness > window[j-1].loudness) energyTrend++;
+        }
+        
+        // If 6+ segments show increasing energy
+        if (energyTrend >= 6) {
+            buildUps.push({
+                start: window[0].start,
+                end: window[window.length - 1].start,
+                intensity: energyTrend / window.length,
+                duration: window[window.length - 1].start - window[0].start
+            });
+        }
+    }
+    
+    return buildUps;
 }
 
 const PORT = process.env.PORT || 3000;

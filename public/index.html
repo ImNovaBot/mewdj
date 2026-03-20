@@ -103,27 +103,29 @@
                 <div class="mix-controls">
                     <button id="play-btn" class="control-btn play">▶️ PLAY</button>
                     <button id="pause-btn" class="control-btn pause">⏸️ PAUSE</button>
-                    <button id="next-btn" class="control-btn next">⏭️ NEXT</button>
-                    <button id="mix-btn" class="control-btn mix">🎛️ AUTO MIX</button>
+                    <button id="next-btn" class="control-btn next">⏭️ SKIP</button>
+                    <button id="mix-btn" class="control-btn mix active">🐾 MEW MIXING</button>
                 </div>
             </div>
 
             <!-- Crossfader & Effects -->
             <div class="mixer-section">
                 <div class="crossfader-container">
-                    <label>Crossfader</label>
-                    <input type="range" id="crossfader" min="0" max="100" value="50" class="crossfader">
+                    <label>🔮 MEW's Psychic Crossfader</label>
+                    <input type="range" id="crossfader" min="0" max="100" value="50" class="crossfader" disabled>
                     <div class="crossfader-labels">
-                        <span>A</span>
-                        <span>B</span>
+                        <span>Current</span>
+                        <span>Next</span>
                     </div>
+                    <p class="auto-label">✨ Automatically controlled by MEW's psychic powers</p>
                 </div>
 
                 <div class="effects-rack">
-                    <button class="effect-btn" data-effect="reverb">🌊 REVERB</button>
-                    <button class="effect-btn" data-effect="filter">🔊 FILTER</button>
-                    <button class="effect-btn" data-effect="echo">📡 ECHO</button>
-                    <button class="effect-btn" data-effect="airhorn">📯 HORN</button>
+                    <div class="effects-status">🔮 MEW applies effects automatically during transitions</div>
+                    <div class="effect-indicator" id="effect-reverb">🌊 REVERB</div>
+                    <div class="effect-indicator" id="effect-filter">🔊 FILTER</div>
+                    <div class="effect-indicator" id="effect-echo">📡 ECHO</div>
+                    <div class="effect-indicator" id="effect-drop">💥 DROPS</div>
                 </div>
             </div>
 
@@ -181,18 +183,18 @@
             <h3>🧠 MEW's Psychic Brain</h3>
             <div class="ai-insights">
                 <div class="insight-item">
-                    <strong>Crowd Energy:</strong> <span id="crowd-energy">Building</span>
+                    <strong>Mixing Status:</strong> <span id="mixing-status">🔮 Legendary automatic mixing active</span>
                 </div>
                 <div class="insight-item">
-                    <strong>Mix Strategy:</strong> <span id="mix-strategy">Harmonic progression</span>
+                    <strong>Transition Mode:</strong> <span id="transition-mode">✨ Psychic crossfading with effects</span>
                 </div>
                 <div class="insight-item">
-                    <strong>Next Move:</strong> <span id="next-move">Waiting for current track...</span>
+                    <strong>Next Action:</strong> <span id="next-action">🎵 Analyzing queue for perfect transitions</span>
                 </div>
             </div>
             <div class="ai-actions">
-                <button id="ai-takeover" class="ai-btn">🔮 MEW Take Control</button>
-                <button id="ai-suggest" class="ai-btn">✨ Psychic Suggestion</button>
+                <button id="ai-suggest" class="ai-btn">✨ Psychic Song Suggestion</button>
+                <button id="smart-queue-btn" class="ai-btn">🧠 Generate Smart Queue</button>
             </div>
         </div>
 
@@ -207,6 +209,7 @@
         </div>
     </div>
 
+    <script src="https://sdk.scdn.co/spotify-player.js"></script>
     <script src="script.js"></script>
 </body>
 </html>
