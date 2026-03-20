@@ -40,6 +40,8 @@ let usageStats = {
     startTime: Date.now()
 };
 
+console.log('📊 Usage tracking initialized:', usageStats);
+
 // Reset daily counters
 function resetDailyCounters() {
     const today = new Date().toDateString();
@@ -55,7 +57,8 @@ function resetDailyCounters() {
 // Calculate render hours (rough estimate based on uptime)
 function updateRenderHours() {
     const uptimeHours = (Date.now() - usageStats.startTime) / (1000 * 60 * 60);
-    usageStats.renderHours = Math.min(uptimeHours, 750); // Cap at monthly limit
+    usageStats.renderHours = uptimeHours; // Don't cap it, let UI handle the display
+    console.log(`📊 Render hours updated: ${uptimeHours.toFixed(2)}h (uptime since start)`);
 }
 
 class SpotifyAPI {
@@ -134,6 +137,7 @@ class SpotifyAPI {
         
         // Track Spotify API usage
         usageStats.spotifyAPICalls++;
+        console.log(`📊 Spotify API call tracked. Total: ${usageStats.spotifyAPICalls} (${endpoint})`);
         
         if (!response.ok) {
             console.error(`Spotify API error: ${response.status} ${response.statusText}`);
@@ -410,6 +414,14 @@ app.get('/api/usage-stats', (req, res) => {
     resetDailyCounters();
     updateRenderHours();
     
+    // Debug logging
+    console.log('📊 Usage Stats Request:', {
+        claudeTokens: usageStats.claudeTokens,
+        spotifyAPICalls: usageStats.spotifyAPICalls,
+        renderHours: usageStats.renderHours,
+        uptime: (Date.now() - usageStats.startTime) / (1000 * 60 * 60) // hours
+    });
+    
     res.json({
         claudeTokens: usageStats.claudeTokens,
         spotifyAPICalls: usageStats.spotifyAPICalls,
@@ -433,6 +445,39 @@ app.get('/api/spotify-status', async (req, res) => {
         console.error('Spotify status check failed:', error);
         res.json({ connected: false, error: error.message });
     }
+});
+
+// Test endpoint to verify tracking (dev only)
+app.post('/api/test-tracking', (req, res) => {
+    const { type } = req.body;
+    
+    switch (type) {
+        case 'claude':
+            usageStats.claudeTokens += 100;
+            console.log(`🧪 Test: Added 100 Claude tokens. Total: ${usageStats.claudeTokens}`);
+            break;
+        case 'spotify':
+            usageStats.spotifyAPICalls += 5;
+            console.log(`🧪 Test: Added 5 Spotify calls. Total: ${usageStats.spotifyAPICalls}`);
+            break;
+        case 'session':
+            usageStats.sessionsToday += 1;
+            console.log(`🧪 Test: Added session. Total: ${usageStats.sessionsToday}`);
+            break;
+    }
+    
+    // Broadcast update
+    broadcast({
+        type: 'usage-update',
+        stats: {
+            claudeTokens: usageStats.claudeTokens,
+            spotifyAPICalls: usageStats.spotifyAPICalls,
+            renderHours: usageStats.renderHours,
+            sessionsToday: usageStats.sessionsToday
+        }
+    });
+    
+    res.json({ success: true, stats: usageStats });
 });
 
 // Get current Spotify user info
@@ -526,7 +571,24 @@ app.get('/api/track-analysis/:trackId', async (req, res) => {
 
 // WebSocket for real-time updates
 wss.on('connection', (ws) => {
-    console.log('DJ client connected');
+    console.log('🎧 DJ client connected');
+    
+    // Track session connection
+    usageStats.sessionsToday++;
+    console.log(`📊 Session tracked. Total today: ${usageStats.sessionsToday}`);
+    
+    // Send initial usage stats
+    setTimeout(() => {
+        ws.send(JSON.stringify({
+            type: 'usage-update',
+            stats: {
+                claudeTokens: usageStats.claudeTokens,
+                spotifyAPICalls: usageStats.spotifyAPICalls,
+                renderHours: usageStats.renderHours,
+                sessionsToday: usageStats.sessionsToday
+            }
+        }));
+    }, 1000);
     
     ws.on('message', async (message) => {
         try {
@@ -600,7 +662,9 @@ async function handleSongRequest(request) {
     console.log('Processing song request:', request);
     
     // Track Claude token usage for AI processing (estimated)
-    usageStats.claudeTokens += estimateTokenUsage(request);
+    const tokenUsage = estimateTokenUsage(request);
+    usageStats.claudeTokens += tokenUsage;
+    console.log(`📊 Claude tokens tracked: +${tokenUsage}, Total: ${usageStats.claudeTokens}`);
     
     try {
         // Check if it's a natural language request vs specific song
@@ -798,7 +862,9 @@ function trackWebSocketTokens(messageType) {
         'default': 50
     };
     
-    usageStats.claudeTokens += tokenEstimates[messageType] || tokenEstimates.default;
+    const tokens = tokenEstimates[messageType] || tokenEstimates.default;
+    usageStats.claudeTokens += tokens;
+    console.log(`📊 WebSocket Claude tokens tracked: +${tokens} for ${messageType}, Total: ${usageStats.claudeTokens}`);
 }
 
 // Find optimal mix-in point for incoming track

@@ -674,9 +674,11 @@ class AIdjPro {
 
     async fetchUsageStats() {
         try {
+            console.log('📊 Fetching usage stats...');
             const response = await fetch('/api/usage-stats');
             if (response.ok) {
                 const stats = await response.json();
+                console.log('📊 Usage stats received:', stats);
                 this.usageStats = { ...this.usageStats, ...stats };
                 this.updateResourceDashboard();
             }
@@ -688,6 +690,12 @@ class AIdjPro {
     updateResourceDashboard() {
         const sessionHours = (Date.now() - this.usageStats.sessionStart) / (1000 * 60 * 60);
         const totalRenderHours = this.usageStats.renderHours + sessionHours;
+
+        console.log('📊 Updating resource dashboard:', {
+            claudeTokens: this.usageStats.claudeTokens,
+            spotifyAPICalls: this.usageStats.spotifyAPICalls,
+            totalRenderHours: totalRenderHours.toFixed(2)
+        });
 
         // Update Claude tokens
         this.updateResourceItem('claude-tokens', 'claude-progress', 
@@ -830,6 +838,28 @@ class AIdjPro {
     trackSpotifyAPI() {
         this.usageStats.spotifyAPICalls += 1;
         this.updateResourceDashboard();
+    }
+
+    // Test function to verify tracking works
+    async testTracking(type) {
+        try {
+            console.log(`🧪 Testing ${type} tracking...`);
+            const response = await fetch('/api/test-tracking', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ type })
+            });
+            
+            if (response.ok) {
+                const result = await response.json();
+                console.log(`🧪 Test result:`, result);
+                this.showNotification(`🧪 Added test ${type} data - check dashboard!`);
+            }
+        } catch (error) {
+            console.error('Test tracking failed:', error);
+        }
     }
 
     initWebAudio() {
