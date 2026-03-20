@@ -439,22 +439,94 @@ class DJMEWv2 {
         `;
     }
 
-    // Playback Controls
-    play() {
-        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-            this.ws.send(JSON.stringify({ type: 'play' }));
+    // Playback Controls - Now Actually Control Spotify!
+    async play() {
+        try {
+            if (this.player && this.deviceId) {
+                // If we have queue items, start playing them
+                if (this.state.queue.length > 0 && !this.state.currentTrack) {
+                    await this.playNextFromQueue();
+                } else {
+                    // Resume current playback
+                    await this.player.resume();
+                    console.log('▶️ Resumed playback');
+                    this.showNotification('▶️ Playing');
+                }
+            } else {
+                this.showNotification('❌ Spotify player not ready', 'error');
+            }
+        } catch (error) {
+            console.error('Play error:', error);
+            this.showNotification('Failed to play: ' + error.message, 'error');
         }
     }
 
-    pause() {
-        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-            this.ws.send(JSON.stringify({ type: 'pause' }));
+    async pause() {
+        try {
+            if (this.player) {
+                await this.player.pause();
+                console.log('⏸️ Paused playback');
+                this.showNotification('⏸️ Paused');
+            }
+        } catch (error) {
+            console.error('Pause error:', error);
+            this.showNotification('Failed to pause: ' + error.message, 'error');
         }
     }
 
-    nextTrack() {
-        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-            this.ws.send(JSON.stringify({ type: 'next' }));
+    async nextTrack() {
+        try {
+            await this.playNextFromQueue();
+        } catch (error) {
+            console.error('Next track error:', error);
+            this.showNotification('Failed to skip: ' + error.message, 'error');
+        }
+    }
+
+    // Play next song from MEW's queue
+    async playNextFromQueue() {
+        if (this.state.queue.length === 0) {
+            this.showNotification('❌ Queue is empty - add some songs!');
+            return;
+        }
+
+        try {
+            const nextTrack = this.state.queue.shift(); // Remove first track
+            console.log('🎵 Playing next from queue:', nextTrack.name);
+
+            // Play the track via Spotify
+            const response = await fetch('/api/play-track', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ 
+                    trackUri: `spotify:track:${nextTrack.id}`,
+                    deviceId: this.deviceId 
+                })
+            });
+
+            if (response.ok) {
+                this.state.currentTrack = nextTrack;
+                this.renderQueue(); // Update queue display
+                this.updateNowPlaying();
+                this.showNotification(`🎵 Now Playing: ${nextTrack.name}`);
+                
+                // Broadcast state update
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    this.ws.send(JSON.stringify({
+                        type: 'track-changed',
+                        track: nextTrack,
+                        queue: this.state.queue
+                    }));
+                }
+            } else {
+                const error = await response.json();
+                throw new Error(error.error || 'Failed to play track');
+            }
+        } catch (error) {
+            console.error('❌ Play next error:', error);
+            this.showNotification('Failed to play track: ' + error.message, 'error');
         }
     }
 
@@ -584,35 +656,123 @@ class DJMEWv2 {
         }, 4000);
     }
 
-    // Spotify Web Playbook SDK Integration
+    // Spotify Web Playback SDK Integration
     async initSpotifyPlayer() {
         try {
+            console.log('🎵 Initializing Spotify Web Playback SDK...');
             const tokenResponse = await fetch('/api/spotify-token');
+            
+            if (!tokenResponse.ok) {
+                console.log('❌ No Spotify token available - player not initialized');
+                return;
+            }
+            
             const { access_token } = await tokenResponse.json();
             
-            const player = new Spotify.Player({
-                name: 'DJ MEW - Smart Queue Master',
+            this.player = new Spotify.Player({
+                name: 'DJ MEW v2.0 - Smart Queue Master',
                 getOAuthToken: cb => { cb(access_token); },
                 volume: 0.8
             });
             
             // Ready
-            player.addListener('ready', ({ device_id }) => {
-                console.log('🎵 Spotify player ready:', device_id);
+            this.player.addListener('ready', ({ device_id }) => {
+                console.log('✅ DJ MEW player ready! Device ID:', device_id);
                 this.deviceId = device_id;
+                this.showNotification('🎵 DJ MEW player ready! You can now play music.');
+                
+                // Auto-transfer playback to this device
+                this.transferPlayback(device_id);
             });
             
             // Not ready
-            player.addListener('not_ready', ({ device_id }) => {
-                console.log('🎵 Spotify player not ready:', device_id);
+            this.player.addListener('not_ready', ({ device_id }) => {
+                console.log('❌ DJ MEW player disconnected:', device_id);
+                this.showNotification('❌ DJ MEW player disconnected', 'error');
+            });
+
+            // Player state changes
+            this.player.addListener('player_state_changed', (state) => {
+                if (state) {
+                    this.updatePlayerState(state);
+                }
+            });
+            
+            // Errors
+            this.player.addListener('initialization_error', ({ message }) => {
+                console.error('❌ Spotify player initialization error:', message);
+                this.showNotification('Failed to initialize Spotify player: ' + message, 'error');
+            });
+
+            this.player.addListener('authentication_error', ({ message }) => {
+                console.error('❌ Spotify player auth error:', message);
+                this.showNotification('Spotify authentication error - please reconnect', 'error');
+            });
+
+            this.player.addListener('account_error', ({ message }) => {
+                console.error('❌ Spotify account error:', message);
+                this.showNotification('Spotify Premium required for playback', 'error');
             });
             
             // Connect to the player
-            player.connect();
+            console.log('🔗 Connecting to Spotify...');
+            const connected = await this.player.connect();
+            
+            if (connected) {
+                console.log('✅ Connected to Spotify Web Playback SDK');
+            } else {
+                console.error('❌ Failed to connect to Spotify Web Playback SDK');
+                this.showNotification('Failed to connect to Spotify player', 'error');
+            }
             
         } catch (error) {
-            console.error('Failed to initialize Spotify player:', error);
+            console.error('❌ Failed to initialize Spotify player:', error);
+            this.showNotification('Failed to initialize Spotify player: ' + error.message, 'error');
         }
+    }
+
+    // Transfer playback to MEW device
+    async transferPlayback(deviceId) {
+        try {
+            console.log('🔄 Transferring playback to DJ MEW...');
+            
+            const response = await fetch('/api/transfer-playback', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ deviceId })
+            });
+
+            if (response.ok) {
+                console.log('✅ Playback transferred to DJ MEW');
+                this.showNotification('🎧 Playback transferred to DJ MEW!');
+            } else {
+                console.log('⚠️ Could not auto-transfer playback');
+            }
+        } catch (error) {
+            console.error('Transfer playback error:', error);
+        }
+    }
+
+    // Update player state from Spotify
+    updatePlayerState(state) {
+        console.log('🎵 Player state update:', state);
+        
+        this.state.isPlaying = !state.paused;
+        
+        if (state.track_window.current_track) {
+            const track = state.track_window.current_track;
+            this.state.currentTrack = {
+                name: track.name,
+                artist: track.artists[0]?.name,
+                album: track.album.name,
+                image: track.album.images[0]?.url
+            };
+        }
+        
+        this.updateNowPlaying();
+        this.updatePlaybackControls();
     }
 
     updateUI() {

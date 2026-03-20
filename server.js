@@ -494,6 +494,53 @@ app.get('/api/usage-stats', (req, res) => {
     res.json(usageStats);
 });
 
+// Transfer playback to specific device
+app.post('/api/transfer-playback', async (req, res) => {
+    try {
+        const { deviceId } = req.body;
+        
+        console.log('🔄 Transferring playback to device:', deviceId);
+        
+        await spotify.apiCall('/me/player', {
+            method: 'PUT',
+            body: JSON.stringify({
+                device_ids: [deviceId],
+                play: false
+            })
+        });
+        
+        console.log('✅ Playback transferred successfully');
+        res.json({ success: true });
+        
+    } catch (error) {
+        console.error('❌ Transfer playback error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Play specific track on device
+app.post('/api/play-track', async (req, res) => {
+    try {
+        const { trackUri, deviceId } = req.body;
+        
+        console.log('🎵 Playing track:', trackUri, 'on device:', deviceId);
+        
+        await spotify.apiCall(`/me/player/play?device_id=${deviceId}`, {
+            method: 'PUT',
+            body: JSON.stringify({
+                uris: [trackUri]
+            })
+        });
+        
+        console.log('✅ Track started successfully');
+        res.json({ success: true });
+        
+    } catch (error) {
+        console.error('❌ Play track error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Test audio features endpoint
 app.get('/api/test-audio-features/:trackId', async (req, res) => {
     try {
