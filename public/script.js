@@ -31,8 +31,10 @@ class AIdjPro {
             masterGain: null
         };
         
+        console.log('🎵 DJ MEW initializing...');
         this.initWebSocket();
         this.initEventListeners();
+        console.log('🔍 About to check auth status...');
         this.checkAuthStatus();
         this.initResourceMonitoring();
         this.initWebAudio();
@@ -206,7 +208,10 @@ class AIdjPro {
 
     checkAuthStatus() {
         const urlParams = new URLSearchParams(window.location.search);
+        console.log('🔍 Checking auth status, URL params:', Object.fromEntries(urlParams));
+        
         if (urlParams.get('authenticated') === 'true') {
+            console.log('✅ Authentication detected in URL');
             this.hideConnectionPanel();
             
             // Parse user info if available
@@ -214,7 +219,9 @@ class AIdjPro {
             let userInfo = null;
             if (userParam) {
                 try {
+                    console.log('📊 Raw user param:', userParam);
                     userInfo = JSON.parse(decodeURIComponent(userParam));
+                    console.log('👤 Parsed user info:', userInfo);
                 } catch (e) {
                     console.error('Failed to parse user info:', e);
                 }
@@ -223,15 +230,28 @@ class AIdjPro {
             this.updateSpotifyStatus(true, userInfo);
             this.showNotification(`🐾 Welcome to DJ MEW${userInfo?.display_name ? ', ' + userInfo.display_name : ''}!`);
             
-            // Clear URL params
-            window.history.replaceState({}, document.title, window.location.pathname);
+            // Clear URL params after a delay to allow processing
+            setTimeout(() => {
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }, 1000);
+            
+            console.log('🎵 Spotify authentication complete!');
         } else if (urlParams.get('error')) {
+            console.error('❌ Authentication error in URL');
             this.showNotification('❌ Spotify connection failed', 'error');
+        } else {
+            console.log('ℹ️ No authentication parameters in URL');
         }
     }
 
     hideConnectionPanel() {
-        document.getElementById('connection-panel').style.display = 'none';
+        const panel = document.getElementById('connection-panel');
+        if (panel) {
+            panel.style.display = 'none';
+            console.log('🚪 Connection panel hidden');
+        } else {
+            console.error('❌ Connection panel element not found');
+        }
     }
 
     updateConnectionStatus(connected) {
@@ -241,9 +261,15 @@ class AIdjPro {
 
     updateSpotifyStatus(connected, userInfo = null) {
         const statusEl = document.getElementById('spotify-status');
-        const tooltip = document.getElementById('spotify-tooltip');
+        console.log('🔄 Updating Spotify status:', { connected, userInfo: userInfo ? 'present' : 'null' });
+        
+        if (!statusEl) {
+            console.error('❌ Spotify status element not found');
+            return;
+        }
         
         if (connected) {
+            console.log('✅ Setting connected status');
             statusEl.innerHTML = `✅ Spotify Connected
                 <div class="spotify-status-tooltip" id="spotify-tooltip">
                     <div class="spotify-user-info">
@@ -261,11 +287,14 @@ class AIdjPro {
             statusEl.style.color = '#a855f7';
             statusEl.style.animation = 'psychic-pulse 2s ease-in-out infinite';
             
+            console.log(`👤 Connected as: ${userInfo?.display_name || 'Unknown User'}`);
+            
             // Fetch user info if not provided
             if (!userInfo) {
                 this.fetchSpotifyUserInfo();
             }
         } else {
+            console.log('❌ Setting disconnected status');
             statusEl.innerHTML = '❌ Not Connected';
             statusEl.style.color = '#ef4444';
             statusEl.style.animation = 'none';
