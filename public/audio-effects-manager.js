@@ -53,6 +53,12 @@ class AudioEffectsManager {
             // Create Web Audio API context
             this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
             
+            // CRITICAL: Resume audio context (required for autoplay policies)
+            if (this.audioContext.state === 'suspended') {
+                console.log('🔓 Resuming audio context for effects...');
+                await this.audioContext.resume();
+            }
+            
             // Create audio graph for mixing
             this.masterGain = this.audioContext.createGain();
             this.effectsGain = this.audioContext.createGain();
@@ -63,18 +69,51 @@ class AudioEffectsManager {
             this.musicGain.connect(this.masterGain);
             this.masterGain.connect(this.audioContext.destination);
             
-            // Set initial levels
+            // Set initial levels (LOUDER for effects!)
             this.masterGain.gain.value = 1.0;      // Master volume
-            this.effectsGain.gain.value = 0.8;     // Effects prominent but not overpowering
-            this.musicGain.gain.value = 0.9;       // Music slightly lower to make room for effects
+            this.effectsGain.gain.value = 1.0;     // Effects at full volume by default
+            this.musicGain.gain.value = 0.8;       // Music lower to make room for effects
             
             await this.loadEffects();
             
             this.isInitialized = true;
             console.log('✅ MEW\'s audio effects system ready!');
             
+            // Test with a quiet effect to verify audio works
+            setTimeout(() => {
+                this.playTestSound();
+            }, 1000);
+            
         } catch (error) {
             console.error('❌ Failed to initialize audio effects:', error);
+        }
+    }
+
+    // Test that audio is working
+    async playTestSound() {
+        try {
+            console.log('🔬 Testing audio effects system...');
+            
+            // Create a simple test beep
+            const duration = 0.1;
+            const sampleRate = this.audioContext.sampleRate;
+            const buffer = this.audioContext.createBuffer(1, duration * sampleRate, sampleRate);
+            const data = buffer.getChannelData(0);
+            
+            for (let i = 0; i < buffer.length; i++) {
+                const t = i / sampleRate;
+                data[i] = Math.sin(2 * Math.PI * 800 * t) * 0.1; // Quiet test beep
+            }
+            
+            const source = this.audioContext.createBufferSource();
+            source.buffer = buffer;
+            source.connect(this.effectsGain);
+            source.start();
+            
+            console.log('🔊 Audio test completed');
+            
+        } catch (error) {
+            console.error('❌ Audio test failed:', error);
         }
     }
 
@@ -147,12 +186,17 @@ class AudioEffectsManager {
         const data = buffer.getChannelData(0);
         
         for (let i = 0; i < buffer.length; i++) {
-            // Create air horn-like sound (sawtooth with envelope)
+            // Create air horn-like sound (louder sawtooth with envelope)
             const t = i / sampleRate;
-            const envelope = Math.exp(-t * 3) * (t < 0.1 ? t * 10 : 1);
-            data[i] = Math.sin(2 * Math.PI * 440 * t) * envelope * 0.3;
+            const envelope = Math.exp(-t * 2) * (t < 0.1 ? t * 10 : 1);
+            // Mix multiple frequencies for richer air horn sound
+            const freq1 = Math.sin(2 * Math.PI * 440 * t);
+            const freq2 = Math.sin(2 * Math.PI * 880 * t) * 0.5;
+            const freq3 = Math.sin(2 * Math.PI * 220 * t) * 0.3;
+            data[i] = (freq1 + freq2 + freq3) * envelope * 0.6; // Louder!
         }
         
+        console.log('🎺 Generated air horn effect');
         return buffer;
     }
 
@@ -286,7 +330,14 @@ class AudioEffectsManager {
     // MEW's intelligent effect playback
     async playEffect(effectName, volume = null, delay = 0) {
         if (!this.isInitialized) {
+            console.log('🔄 Audio effects not initialized, initializing now...');
             await this.initialize();
+        }
+
+        // Make sure audio context is running
+        if (this.audioContext.state === 'suspended') {
+            console.log('🔓 Resuming audio context...');
+            await this.audioContext.resume();
         }
 
         const audioBuffer = this.effects.get(effectName);
@@ -296,15 +347,18 @@ class AudioEffectsManager {
         }
 
         try {
+            console.log(`🎬 Starting effect: ${effectName}`);
+            
             // Create audio source
             const source = this.audioContext.createBufferSource();
             const gainNode = this.audioContext.createGain();
             
             source.buffer = audioBuffer;
             
-            // Set intelligent volume
-            const effectVolume = volume !== null ? volume : (this.effectVolumes[effectName] || this.effectVolumes['default']);
-            gainNode.gain.value = effectVolume;
+            // Set intelligent volume (LOUDER!)
+            const baseVolume = volume !== null ? volume : (this.effectVolumes[effectName] || this.effectVolumes['default']);
+            const finalVolume = Math.min(1.0, baseVolume * 1.5); // Boost volume by 50%
+            gainNode.gain.value = finalVolume;
             
             // Connect audio graph
             source.connect(gainNode);
@@ -314,18 +368,25 @@ class AudioEffectsManager {
             const startTime = this.audioContext.currentTime + (delay / 1000);
             source.start(startTime);
             
-            console.log(`🔊 MEW playing effect: ${effectName} (volume: ${effectVolume.toFixed(2)}, delay: ${delay}ms)`);
+            console.log(`🔊 MEW playing effect: ${effectName} (volume: ${finalVolume.toFixed(2)}, delay: ${delay}ms, context state: ${this.audioContext.state})`);
             
             // Auto-cleanup
             source.onended = () => {
+                console.log(`🔇 Effect ended: ${effectName}`);
                 source.disconnect();
                 gainNode.disconnect();
             };
             
-            return source; // Return for potential cancellation
+            // Force a small delay to ensure audio starts
+            return new Promise((resolve) => {
+                setTimeout(() => {
+                    resolve(source);
+                }, 50);
+            });
             
         } catch (error) {
             console.error(`❌ Failed to play effect ${effectName}:`, error);
+            throw error;
         }
     }
 

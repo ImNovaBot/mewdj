@@ -2461,6 +2461,55 @@ body {
     font-weight: bold;
 }
 
+.audio-activation {
+    text-align: center;
+    padding: 15px;
+    background: linear-gradient(45deg, rgba(168, 85, 247, 0.1), rgba(245, 158, 11, 0.1));
+    border: 2px dashed rgba(168, 85, 247, 0.5);
+    border-radius: 12px;
+    margin: 10px 0;
+    animation: pulse 2s infinite;
+}
+
+.activate-audio-btn {
+    background: linear-gradient(45deg, #f59e0b, #f97316);
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 25px;
+    font-weight: bold;
+    font-size: 1.1rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(245, 158, 11, 0.3);
+    margin-bottom: 8px;
+}
+
+.activate-audio-btn:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(245, 158, 11, 0.4);
+    background: linear-gradient(45deg, #f97316, #ea580c);
+}
+
+.activate-audio-btn:active {
+    transform: translateY(0);
+}
+
+.audio-activation p {
+    color: #c084fc;
+    margin: 0;
+    font-size: 0.9rem;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        border-color: rgba(168, 85, 247, 0.3);
+    }
+    50% {
+        border-color: rgba(168, 85, 247, 0.7);
+    }
+}
+
 .volume-controls {
     display: grid;
     grid-template-columns: 1fr 1fr;
