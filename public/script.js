@@ -108,6 +108,10 @@ class AIdjPro {
                 this.updateResourceDashboard();
                 break;
                 
+            case 'spotify-token-expired':
+                this.handleTokenExpiry(data.message);
+                break;
+                
             case 'error':
                 this.showNotification(`❌ ${data.message}`, 'error');
                 break;
@@ -280,9 +284,23 @@ class AIdjPro {
         }
     }
     
-    refreshSpotifyConnection() {
-        this.showNotification('🔄 Refreshing Spotify connection...');
-        this.sendCommand('refresh-spotify');
+    async refreshSpotifyConnection() {
+        this.showNotification('🔄 MEW is checking psychic connection to Spotify...');
+        
+        const statusData = await this.makeAPICallWithErrorHandling('/api/spotify-status', {
+            method: 'GET'
+        });
+        
+        if (statusData && statusData.connected) {
+            this.showNotification('✅ Spotify connection is strong!');
+            // Fetch fresh user info
+            this.fetchSpotifyUserInfo();
+        } else {
+            this.showNotification('❌ Connection lost. Redirecting to reconnect...', 'error');
+            setTimeout(() => {
+                window.location.href = '/login';
+            }, 2000);
+        }
     }
     
     signOutSpotify() {
@@ -556,30 +574,21 @@ class AIdjPro {
     }
 
     async searchSpotifyTracks(query) {
-        try {
-            const response = await fetch('/api/search', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ query, limit: 8 })
-            });
+        const data = await this.makeAPICallWithErrorHandling('/api/search', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ query, limit: 8 })
+        });
 
-            if (!response.ok) {
-                throw new Error('Search failed');
-            }
-
-            const data = await response.json();
+        if (data) {
             currentSuggestions = data.tracks?.items || [];
-            
-            // Track Spotify API usage
             this.trackSpotifyAPI();
-            
             this.displaySuggestions(currentSuggestions);
-        } catch (error) {
-            console.error('Search error:', error);
+        } else {
             document.getElementById('search-suggestions').innerHTML = 
-                '<div class="search-no-results">⚠️ Search failed. Try again.</div>';
+                '<div class="search-no-results">⚠️ Search failed. Check MEW\'s connection.</div>';
         }
     }
 
@@ -1161,6 +1170,36 @@ class AIdjPro {
         }
     }
 
+    handleTokenExpiry(message) {
+        this.updateSpotifyStatus(false);
+        this.showNotification(`🔮 ${message}`, 'error');
+        
+        // Show connection modal
+        setTimeout(() => {
+            document.getElementById('connection-panel').style.display = 'flex';
+        }, 2000);
+    }
+
+    async makeAPICallWithErrorHandling(url, options) {
+        try {
+            const response = await fetch(url, options);
+            
+            if (!response.ok) {
+                if (response.status === 401) {
+                    this.handleTokenExpiry('MEW\'s connection to Spotify has expired. Please reconnect!');
+                    return null;
+                }
+                throw new Error(`API call failed: ${response.status}`);
+            }
+            
+            return await response.json();
+        } catch (error) {
+            console.error('API Error:', error);
+            this.showNotification(`⚠️ ${error.message}`, 'error');
+            return null;
+        }
+    }
+
     showManualAddDialog() {
         const query = prompt('Search for a song:');
         if (query) {
@@ -1169,37 +1208,30 @@ class AIdjPro {
     }
 
     async searchAndAddTrack(query) {
-        try {
-            const response = await fetch('/api/search', {
+        const searchData = await this.makeAPICallWithErrorHandling('/api/search', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ query })
+        });
+        
+        if (searchData && searchData.tracks && searchData.tracks.items.length > 0) {
+            const track = searchData.tracks.items[0]; // Take first result
+            
+            const addData = await this.makeAPICallWithErrorHandling('/api/queue-track', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ query })
+                body: JSON.stringify({ trackId: track.id })
             });
             
-            const data = await response.json();
-            
-            if (data.tracks && data.tracks.items.length > 0) {
-                const track = data.tracks.items[0]; // Take first result
-                
-                const addResponse = await fetch('/api/queue-track', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ trackId: track.id })
-                });
-                
-                if (addResponse.ok) {
-                    this.showNotification(`➕ Added: ${track.name}`);
-                }
-            } else {
-                this.showNotification('❌ No tracks found', 'error');
+            if (addData) {
+                this.showNotification(`➕ MEW added: ${track.name}`);
             }
-        } catch (error) {
-            console.error('Search error:', error);
-            this.showNotification('❌ Search failed', 'error');
+        } else if (searchData) {
+            this.showNotification('❌ No tracks found', 'error');
         }
     }
 

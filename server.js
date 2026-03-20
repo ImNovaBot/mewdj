@@ -65,6 +65,8 @@ class SpotifyAPI {
     }
 
     async authenticate(code) {
+        console.log('🔑 Requesting Spotify access token...');
+        
         const response = await fetch('https://accounts.spotify.com/api/token', {
             method: 'POST',
             headers: {
@@ -78,9 +80,23 @@ class SpotifyAPI {
             })
         });
         
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('🔐 Token request failed:', response.status, errorText);
+            throw new Error(`Token request failed: ${response.status} ${errorText}`);
+        }
+        
         const data = await response.json();
+        
+        if (!data.access_token) {
+            console.error('🔐 No access token in response:', data);
+            throw new Error('No access token received from Spotify');
+        }
+        
         this.token = data.access_token;
         djState.accessToken = this.token;
+        
+        console.log('✅ Spotify token obtained successfully');
         return data;
     }
 
@@ -103,6 +119,10 @@ class SpotifyAPI {
     }
 
     async apiCall(endpoint, options = {}) {
+        if (!this.token) {
+            throw new Error('No Spotify access token available. Please reconnect.');
+        }
+
         const response = await fetch(this.baseUrl + endpoint, {
             ...options,
             headers: {
@@ -116,10 +136,27 @@ class SpotifyAPI {
         usageStats.spotifyAPICalls++;
         
         if (!response.ok) {
+            console.error(`Spotify API error: ${response.status} ${response.statusText}`);
+            console.error(`Endpoint: ${endpoint}`);
+            console.error(`Token exists: ${!!this.token}`);
+            
+            if (response.status === 401) {
+                // Token expired or invalid
+                this.token = null;
+                djState.accessToken = null;
+                broadcast({ 
+                    type: 'spotify-token-expired',
+                    message: 'Spotify session expired. Please reconnect.'
+                });
+                throw new Error('Spotify session expired. Please reconnect to MEW.');
+            }
+            
             throw new Error(`Spotify API error: ${response.status} ${response.statusText}`);
         }
         
-        return await response.json();
+        // Handle empty responses
+        const text = await response.text();
+        return text ? JSON.parse(text) : {};
     }
 
     // Get detailed audio features for beat matching
@@ -272,7 +309,10 @@ app.get('/login', (req, res) => {
         'user-modify-playback-state',
         'user-read-currently-playing',
         'playlist-read-private',
-        'playlist-read-collaborative'
+        'playlist-read-collaborative',
+        'streaming',
+        'user-read-email',
+        'user-read-private'
     ].join(' ');
 
     const authUrl = 'https://accounts.spotify.com/authorize?' +
@@ -288,20 +328,31 @@ app.get('/login', (req, res) => {
 
 app.get('/callback', async (req, res) => {
     const { code } = req.query;
+    console.log('🔐 Spotify callback received, authenticating...');
+    
     try {
         const tokens = await spotify.authenticate(code);
+        console.log('✅ Token received, expires in:', tokens.expires_in, 'seconds');
         
-        // Fetch user info after successful authentication
+        // Test the token immediately
         try {
             const userInfo = await spotify.apiCall('/me');
+            console.log(`🎵 Successfully connected as: ${userInfo.display_name}`);
+            
+            // Broadcast successful connection
+            broadcast({ 
+                type: 'spotify-connected', 
+                userInfo: userInfo 
+            });
+            
             res.redirect(`/?authenticated=true&user=${encodeURIComponent(JSON.stringify(userInfo))}`);
         } catch (userError) {
-            console.error('Failed to fetch user info:', userError);
+            console.error('❌ Failed to fetch user info after auth:', userError);
             res.redirect('/?authenticated=true');
         }
     } catch (error) {
-        console.error('Auth error:', error);
-        res.redirect('/?error=auth_failed');
+        console.error('❌ Authentication error:', error);
+        res.redirect(`/?error=auth_failed&detail=${encodeURIComponent(error.message)}`);
     }
 });
 
@@ -319,20 +370,33 @@ app.post('/api/search', async (req, res) => {
 
 app.post('/api/queue-track', async (req, res) => {
     try {
+        if (!spotify.token) {
+            return res.status(401).json({ error: 'Spotify not connected. Please reconnect.' });
+        }
+
         const { trackId } = req.body;
+        
+        // Get track info first
+        const track = await spotify.apiCall(`/tracks/${trackId}`);
+        
+        // Then analyze it
         const analysis = await mixEngine.analyzeTrack(trackId);
         
         djState.queue.push({
             trackId,
+            track,
             analysis,
             addedAt: Date.now()
         });
+        
+        console.log(`🎵 Added to queue: ${track.name} by ${track.artists[0].name}`);
         
         // Broadcast queue update
         broadcast({ type: 'queue-updated', queue: djState.queue });
         
         res.json({ success: true, queue: djState.queue });
     } catch (error) {
+        console.error('Queue track error:', error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -353,6 +417,22 @@ app.get('/api/usage-stats', (req, res) => {
         sessionsToday: usageStats.sessionsToday,
         uptime: Date.now() - usageStats.startTime
     });
+});
+
+// Check Spotify connection status
+app.get('/api/spotify-status', async (req, res) => {
+    if (!spotify.token) {
+        return res.json({ connected: false, error: 'No token' });
+    }
+
+    try {
+        // Try a simple API call to check if token is valid
+        await spotify.apiCall('/me');
+        res.json({ connected: true });
+    } catch (error) {
+        console.error('Spotify status check failed:', error);
+        res.json({ connected: false, error: error.message });
+    }
 });
 
 // Get current Spotify user info
