@@ -313,10 +313,7 @@ app.get('/login', (req, res) => {
         'user-modify-playback-state',
         'user-read-currently-playing',
         'playlist-read-private',
-        'playlist-read-collaborative',
-        'streaming',
-        'user-read-email',
-        'user-read-private'
+        'playlist-read-collaborative'
     ].join(' ');
 
     const authUrl = 'https://accounts.spotify.com/authorize?' +
