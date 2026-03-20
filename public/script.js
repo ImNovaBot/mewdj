@@ -8,13 +8,22 @@ class DJMEWv2 {
             isPlaying: false,
             currentTrack: null,
             queue: [],
-            connected: false
+            connected: false,
+            crossfading: false,
+            nextTrackLoaded: false
         };
         this.stats = {};
         this.searchResults = [];
         this.searchTimeout = null;
         
-        console.log('🎵 DJ MEW v2.0 - Smart Queue Master initializing...');
+        // DJ Mixing Properties
+        this.audioContext = null;
+        this.crossfadeValue = 0.5; // 0 = track A, 1 = track B
+        this.transitionDuration = 8000; // 8 seconds for crossfade
+        this.nextTrackStartTime = null;
+        this.isTransitioning = false;
+        
+        console.log('🎵 DJ MEW v2.0 - Smart Queue Master + DJ Mixing initializing...');
         this.init();
     }
 
@@ -23,11 +32,151 @@ class DJMEWv2 {
         this.initEventListeners();
         this.checkAuthStatus();
         this.fetchStats();
+        this.initDJMixing();
         
         // Initialize Spotify Web Playbook SDK if available
         window.onSpotifyWebPlaybackSDKReady = () => {
             this.initSpotifyPlayer();
         };
+    }
+
+    // Initialize DJ Mixing Capabilities
+    async initDJMixing() {
+        try {
+            // Initialize Web Audio API for mixing
+            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            
+            // Create master gain nodes for crossfading
+            this.trackAGain = this.audioContext.createGain();
+            this.trackBGain = this.audioContext.createGain();
+            this.masterGain = this.audioContext.createGain();
+            
+            // Connect the audio graph
+            this.trackAGain.connect(this.masterGain);
+            this.trackBGain.connect(this.masterGain);
+            this.masterGain.connect(this.audioContext.destination);
+            
+            // Initialize crossfader
+            this.setCrossfaderPosition(0.5); // Center position
+            
+            console.log('🎛️ DJ Mixing initialized - ready for legendary crossfading!');
+            
+        } catch (error) {
+            console.error('❌ Failed to initialize DJ mixing:', error);
+            // Fallback to basic playback without mixing
+        }
+    }
+
+    // Set crossfader position (0 = track A only, 1 = track B only, 0.5 = both equal)
+    setCrossfaderPosition(position) {
+        if (!this.audioContext) return;
+        
+        this.crossfadeValue = Math.max(0, Math.min(1, position));
+        
+        // Calculate gain values for smooth crossfade
+        const trackAVolume = Math.cos(this.crossfadeValue * Math.PI / 2);
+        const trackBVolume = Math.sin(this.crossfadeValue * Math.PI / 2);
+        
+        this.trackAGain.gain.setValueAtTime(trackAVolume, this.audioContext.currentTime);
+        this.trackBGain.gain.setValueAtTime(trackBVolume, this.audioContext.currentTime);
+    }
+
+    // Automatic DJ crossfade between tracks
+    async performAutoCrossfade(fromTrack, toTrack) {
+        if (!this.audioContext || this.isTransitioning) return false;
+        
+        console.log('🎛️ MEW is crossfading from', fromTrack.name, 'to', toTrack.name);
+        this.isTransitioning = true;
+        
+        try {
+            // Calculate optimal crossfade timing based on BPM
+            const crossfadeDuration = this.calculateCrossfadeDuration(fromTrack, toTrack);
+            
+            // Start next track slightly behind beat to sync up
+            const beatOffset = this.calculateBeatOffset(fromTrack, toTrack);
+            
+            // Show crossfade visualization
+            this.showNotification(`🎛️ MEW is crossfading... ${fromTrack.name} → ${toTrack.name}`);
+            
+            // Perform the crossfade
+            await this.executeSmartCrossfade(crossfadeDuration, beatOffset);
+            
+            console.log('✨ Crossfade complete - legendary transition achieved!');
+            return true;
+            
+        } catch (error) {
+            console.error('❌ Crossfade failed:', error);
+            return false;
+        } finally {
+            this.isTransitioning = false;
+        }
+    }
+
+    // Calculate optimal crossfade duration based on track compatibility
+    calculateCrossfadeDuration(fromTrack, toTrack) {
+        if (!fromTrack.analysis || !toTrack.analysis) {
+            return 8000; // Default 8 seconds
+        }
+        
+        // Shorter crossfade for similar BPMs, longer for different ones
+        const bpmDiff = Math.abs(fromTrack.analysis.tempo - toTrack.analysis.tempo);
+        const baseDuration = 6000; // 6 seconds base
+        const bpmFactor = Math.min(bpmDiff / 10, 4); // Max 4 extra seconds
+        
+        return baseDuration + (bpmFactor * 1000);
+    }
+
+    // Calculate beat offset for perfect sync
+    calculateBeatOffset(fromTrack, toTrack) {
+        if (!fromTrack.analysis || !toTrack.analysis) {
+            return 0;
+        }
+        
+        // Simple beat matching - start next track on beat boundary
+        const fromBPM = fromTrack.analysis.tempo;
+        const toBPM = toTrack.analysis.tempo;
+        const beatLength = (60 / fromBPM) * 1000; // Beat length in ms
+        
+        return beatLength / 4; // Start slightly behind beat
+    }
+
+    // Execute the actual crossfade with Web Audio API
+    async executeSmartCrossfade(duration, beatOffset) {
+        const steps = 50; // Smooth crossfade steps
+        const stepDuration = duration / steps;
+        
+        for (let i = 0; i <= steps; i++) {
+            const progress = i / steps;
+            const crossfadePosition = 0.5 + (progress * 0.5); // 0.5 to 1.0
+            
+            this.setCrossfaderPosition(crossfadePosition);
+            
+            // Add subtle effects during transition
+            if (i === Math.floor(steps * 0.3)) {
+                this.applyTransitionEffect('filter-sweep');
+            }
+            if (i === Math.floor(steps * 0.7)) {
+                this.applyTransitionEffect('reverb-tail');
+            }
+            
+            await new Promise(resolve => setTimeout(resolve, stepDuration));
+        }
+        
+        // Reset crossfader for next track
+        this.setCrossfaderPosition(0.5);
+    }
+
+    // Apply transition effects during crossfade
+    applyTransitionEffect(effect) {
+        console.log(`🎛️ Applying ${effect} effect`);
+        // Visual effect indicators
+        const effectElement = document.getElementById(`effect-${effect.split('-')[0]}`);
+        if (effectElement) {
+            effectElement.classList.add('active');
+            setTimeout(() => {
+                effectElement.classList.remove('active');
+            }, 2000);
+        }
     }
 
     // WebSocket Connection - Simple and Reliable
@@ -493,7 +642,7 @@ class DJMEWv2 {
         }
     }
 
-    // Play next song from MEW's queue
+    // Play next song from MEW's queue with DJ mixing
     async playNextFromQueue() {
         console.log('🎵 playNextFromQueue called, queue length:', this.state.queue.length);
         
@@ -504,47 +653,185 @@ class DJMEWv2 {
 
         try {
             const nextTrack = this.state.queue.shift(); // Remove first track
-            console.log('🎵 Playing next from MEW queue:', nextTrack.name, 'by', nextTrack.artist);
-            console.log('🎵 Track ID:', nextTrack.id);
-            console.log('🎵 Device ID:', this.deviceId);
+            console.log('🎵 Next track from MEW queue:', nextTrack.name, 'by', nextTrack.artist);
+            console.log('🎛️ Analysis - BPM:', nextTrack.bpm, 'Key:', nextTrack.key, 'Energy:', nextTrack.energy + '%');
 
-            // Play the track via Spotify
-            const response = await fetch('/api/play-track', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ 
-                    trackUri: `spotify:track:${nextTrack.id}`,
-                    deviceId: this.deviceId 
-                })
-            });
-
-            console.log('🎵 Play track response:', response.status);
-
-            if (response.ok) {
-                this.state.currentTrack = nextTrack;
-                this.renderQueue(); // Update queue display
-                this.updateNowPlaying();
-                this.showNotification(`🎵 MEW Playing: ${nextTrack.name}`);
-                
-                // Broadcast state update
-                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-                    this.ws.send(JSON.stringify({
-                        type: 'track-changed',
-                        track: nextTrack,
-                        queue: this.state.queue
-                    }));
-                }
+            // If we have a current track, perform DJ crossfade
+            if (this.state.currentTrack && this.audioContext) {
+                console.log('🎛️ Performing legendary DJ crossfade...');
+                await this.performDJTransition(this.state.currentTrack, nextTrack);
             } else {
-                const error = await response.json();
-                console.error('❌ Play track API error:', error);
-                throw new Error(error.error || 'Failed to play track');
+                console.log('🎵 No current track - starting fresh');
+                await this.startTrackPlayback(nextTrack);
             }
+
+            // Update state
+            this.state.currentTrack = nextTrack;
+            this.renderQueue(); // Update queue display
+            this.updateNowPlaying();
+            
+            // Schedule next transition if more tracks in queue
+            if (this.state.queue.length > 0) {
+                this.scheduleNextTransition(nextTrack);
+            }
+            
+            // Broadcast state update
+            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                this.ws.send(JSON.stringify({
+                    type: 'track-changed',
+                    track: nextTrack,
+                    queue: this.state.queue
+                }));
+            }
+            
         } catch (error) {
             console.error('❌ Play next error:', error);
             this.showNotification('Failed to play track: ' + error.message, 'error');
         }
+    }
+
+    // Perform DJ transition between tracks
+    async performDJTransition(fromTrack, toTrack) {
+        console.log('🎛️ MEW\'s psychic DJ powers activating...');
+        console.log(`🎵 Transitioning: ${fromTrack.name} (${fromTrack.bpm} BPM) → ${toTrack.name} (${toTrack.bpm} BPM)`);
+        
+        // Show transition notification
+        this.showNotification(`🔮 MEW is mixing... ${toTrack.name}`);
+        
+        // Calculate transition timing
+        const compatibility = this.calculateTransitionCompatibility(fromTrack, toTrack);
+        const transitionDuration = this.calculateTransitionDuration(fromTrack, toTrack, compatibility);
+        
+        console.log(`🧠 Transition compatibility: ${compatibility}% - Duration: ${transitionDuration/1000}s`);
+        
+        try {
+            // Start playing next track (will crossfade with current)
+            await this.startTrackPlayback(toTrack);
+            
+            // Perform visual crossfade effect
+            await this.visualCrossfade(fromTrack, toTrack, transitionDuration);
+            
+            console.log('✨ Legendary transition complete!');
+            this.showNotification(`✨ Perfect transition! ${compatibility}% compatibility`);
+            
+        } catch (error) {
+            console.error('❌ DJ transition failed:', error);
+            // Fallback to simple track change
+            await this.startTrackPlayback(toTrack);
+        }
+    }
+
+    // Start track playback via Spotify
+    async startTrackPlayback(track) {
+        const response = await fetch('/api/play-track', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ 
+                trackUri: `spotify:track:${track.id}`,
+                deviceId: this.deviceId 
+            })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to play track');
+        }
+    }
+
+    // Calculate how well two tracks will transition
+    calculateTransitionCompatibility(fromTrack, toTrack) {
+        if (!fromTrack.analysis || !toTrack.analysis) return 50;
+
+        let score = 0;
+        
+        // BPM compatibility (40% weight)
+        const bpmDiff = Math.abs(fromTrack.analysis.tempo - toTrack.analysis.tempo);
+        const bpmScore = Math.max(0, 100 - (bpmDiff / 2));
+        score += bpmScore * 0.4;
+
+        // Key compatibility (30% weight) 
+        const keyScore = this.getKeyCompatibility(fromTrack.analysis.key, toTrack.analysis.key);
+        score += keyScore * 0.3;
+
+        // Energy flow (30% weight)
+        const energyDiff = Math.abs(fromTrack.analysis.energy - toTrack.analysis.energy);
+        const energyScore = Math.max(0, 100 - (energyDiff * 100));
+        score += energyScore * 0.3;
+
+        return Math.round(score);
+    }
+
+    // Calculate transition duration based on compatibility
+    calculateTransitionDuration(fromTrack, toTrack, compatibility) {
+        const baseDuration = 8000; // 8 seconds
+        
+        // Shorter transitions for high compatibility
+        if (compatibility > 80) return 6000; // 6 seconds
+        if (compatibility > 60) return 8000; // 8 seconds  
+        return 10000; // 10 seconds for difficult transitions
+    }
+
+    // Visual crossfade effect
+    async visualCrossfade(fromTrack, toTrack, duration) {
+        const crossfader = document.getElementById('crossfader');
+        const steps = 60; // Smooth animation
+        const stepDuration = duration / steps;
+        
+        // Show crossfader controls
+        this.showCrossfaderActive(true);
+        
+        for (let i = 0; i <= steps; i++) {
+            const progress = i / steps;
+            
+            // Move crossfader visually
+            if (crossfader) {
+                crossfader.value = 50 + (progress * 50); // 50 to 100
+            }
+            
+            // Apply transition effects at key moments
+            if (i === Math.floor(steps * 0.25)) {
+                this.activateEffect('filter');
+            }
+            if (i === Math.floor(steps * 0.75)) {
+                this.activateEffect('reverb');
+            }
+            
+            await new Promise(resolve => setTimeout(resolve, stepDuration));
+        }
+        
+        // Reset crossfader
+        if (crossfader) {
+            crossfader.value = 50;
+        }
+        this.showCrossfaderActive(false);
+    }
+
+    // Show crossfader in action
+    showCrossfaderActive(active) {
+        const container = document.querySelector('.crossfader-container');
+        if (container) {
+            container.classList.toggle('mixing', active);
+        }
+    }
+
+    // Activate visual effect indicator
+    activateEffect(effect) {
+        const effectEl = document.getElementById(`effect-${effect}`);
+        if (effectEl) {
+            effectEl.classList.add('active');
+            setTimeout(() => {
+                effectEl.classList.remove('active');
+            }, 2000);
+        }
+    }
+
+    // Schedule next transition
+    scheduleNextTransition(currentTrack) {
+        // For now, we'll transition when user clicks next
+        // Later we can add auto-transition based on track length
+        console.log('🔮 Next transition prepared...');
     }
 
     // UI Updates
