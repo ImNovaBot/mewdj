@@ -1,7 +1,10 @@
+// Required modules
 const express = require('express');
 const path = require('path');
+const fs = require('fs').promises;
 const WebSocket = require('ws');
 
+// App configuration
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -14,6 +17,9 @@ const REDIRECT_URI = process.env.REDIRECT_URI || 'https://mewdj.onrender.com/cal
 app.use(express.json());
 app.use(express.static('public'));
 
+// File paths
+const STATS_FILE = path.join(__dirname, 'usage-stats.json');
+
 // DJ State - Simple and Clean
 let djState = {
     currentTrack: null,
@@ -22,11 +28,6 @@ let djState = {
     accessToken: null,
     analysisCache: new Map() // Cache song analysis to avoid repeated API calls
 };
-
-// Persistent Usage Statistics
-const fs = require('fs').promises;
-
-const STATS_FILE = path.join(__dirname, 'usage-stats.json');
 
 // Default stats structure
 let usageStats = {
