@@ -45,31 +45,31 @@ class DJMEWv2 {
         try {
             console.log('🎛️ Initializing MEW\'s legendary DJ mixing system...');
             
-            // Initialize MEW's SIMPLE audio effects (much more reliable!)
-            if (window.simpleAudioEffects) {
-                this.updateAudioStatus('🔄 Loading MEW\'s legendary effects...');
-                const effectCount = await window.simpleAudioEffects.initialize();
-                this.audioEffects = window.simpleAudioEffects;
+            // Initialize MEW's RAVE-QUALITY audio system!
+            if (window.raveAudio) {
+                this.updateAudioStatus('🔥 Loading FESTIVAL-QUALITY effects...');
+                const effectCount = await window.raveAudio.initialize();
+                this.audioEffects = window.raveAudio;
                 
                 if (effectCount > 0) {
-                    this.updateAudioStatus(`✅ ${effectCount} effects ready! No activation needed - they just work!`);
-                    console.log('✅ MEW\'s SIMPLE audio effects system ready!');
+                    this.updateAudioStatus(`🎪 ${effectCount} RAVE effects ready! SOUNDS LIKE A REAL FESTIVAL!`);
+                    console.log('🔥 MEW\'s RAVE AUDIO system ready to drop!');
                     
-                    // Test that audio works immediately
+                    // Test that festival audio works
                     setTimeout(async () => {
                         const testSuccess = await this.audioEffects.testEffect('whoosh');
                         if (testSuccess) {
-                            this.updateAudioStatus(`🔊 Audio confirmed working! MEW can make sounds!`);
+                            this.updateAudioStatus(`🔊 FESTIVAL AUDIO CONFIRMED! MEW sounds like a real rave!`);
                         } else {
-                            this.updateAudioStatus(`⚠️ Audio may need user interaction - try clicking any button`);
+                            this.updateAudioStatus(`⚠️ Audio may need user interaction - click any button to activate`);
                         }
                     }, 1000);
                 } else {
-                    this.updateAudioStatus('⚠️ Effects loaded but may need user interaction');
+                    this.updateAudioStatus('⚠️ Festival effects loaded but may need user interaction');
                 }
             } else {
-                this.updateAudioStatus('❌ Audio effects not available');
-                console.warn('⚠️ Simple audio effects not available');
+                this.updateAudioStatus('❌ Rave audio system not available');
+                console.warn('⚠️ Rave audio system not available');
             }
             
             // Initialize Web Audio API for mixing
@@ -1309,25 +1309,25 @@ class DJMEWv2 {
             'mew_signature': 'effect-filter'
         };
         
-        // LAYER AUDIO EFFECT ON TOP OF MUSIC!
+        // DROP FESTIVAL EFFECT OVER MUSIC!
         const audioEffectName = audioEffectMap[effect];
         if (audioEffectName && this.audioEffects) {
             try {
-                console.log(`🎬 MEW layering effect: ${audioEffectName} over music for ${effect}`);
+                console.log(`🔥 MEW dropping FESTIVAL effect: ${audioEffectName} over music for ${effect}`);
                 
-                // Play effect layered over Spotify music (both play simultaneously)
-                const effectVolume = volume ? Math.min(1.0, volume * 1.1) : null; // Use default layered volume
+                // Drop effect over Spotify music at FESTIVAL VOLUME
+                const effectVolume = volume ? Math.min(1.0, volume * 1.1) : null; // Use festival volumes
                 const success = await this.audioEffects.playEffect(audioEffectName, effectVolume);
                 
                 if (success) {
-                    console.log(`🔊 LAYERED: ${audioEffectName} over Spotify music for ${effect}`);
-                    this.showNotification(`🎛️ ${audioEffectName.toUpperCase()} + MUSIC!`, 'success', 1500);
+                    console.log(`🎪 FESTIVAL DROP: ${audioEffectName} over music for ${effect}`);
+                    this.showNotification(`🔥 ${audioEffectName.toUpperCase()} DROPS!`, 'success', 1500);
                 } else {
-                    console.warn(`⚠️ Effect layering may have failed: ${audioEffectName}`);
+                    console.warn(`⚠️ Festival effect may have failed: ${audioEffectName}`);
                 }
                 
             } catch (audioError) {
-                console.error(`❌ Audio layering failed: ${audioEffectName}`, audioError);
+                console.error(`❌ Festival effect failed: ${audioEffectName}`, audioError);
             }
         } else {
             console.warn(`🔇 No audio mapping for effect: ${effect}, using visual only`);
@@ -2684,122 +2684,122 @@ class DJMEWv2 {
             valueEl.textContent = `${value}%`;
         }
         
-        console.log(`🔊 Simple effects volume set to ${value}%`);
+        console.log(`🔥 Festival effects volume set to ${value}%`);
     }
 
     async testEffect(effectName) {
         if (!this.audioEffects) {
-            this.showNotification('Audio effects not initialized!', 'error');
+            this.showNotification('Festival audio not initialized!', 'error');
             return;
         }
         
         try {
-            console.log(`🧪 Testing SIMPLE effect: ${effectName}`);
+            console.log(`🧪 Testing FESTIVAL effect: ${effectName}`);
             
             const success = await this.audioEffects.testEffect(effectName);
             
             if (success) {
-                this.showNotification(`🔊 ${effectName.toUpperCase()} played successfully!`, 'success');
-                console.log(`✅ Test successful: ${effectName}`);
+                this.showNotification(`🔥 ${effectName.toUpperCase()} GOES HARD!`, 'success');
+                console.log(`🔥 Festival test successful: ${effectName}`);
             } else {
-                this.showNotification(`⚠️ ${effectName} may need user interaction to play`, 'warning');
-                console.warn(`⚠️ Test may have failed: ${effectName}`);
+                this.showNotification(`⚠️ ${effectName} may need user interaction`, 'warning');
+                console.warn(`⚠️ Festival test may have failed: ${effectName}`);
             }
         } catch (error) {
-            console.error('Effect test error:', error);
-            this.showNotification('Failed to play effect: ' + error.message, 'error');
+            console.error('Festival effect test error:', error);
+            this.showNotification('Failed to drop effect: ' + error.message, 'error');
         }
     }
 
     async testAllEffects() {
         if (!this.audioEffects) {
-            this.showNotification('Audio effects not initialized!', 'error');
+            this.showNotification('Festival audio not initialized!', 'error');
             return;
         }
         
-        this.showNotification('🧪 Testing all simple MEW effects...');
+        this.showNotification('🎪 Testing all FESTIVAL effects...');
         try {
             await this.audioEffects.testAllEffects();
-            this.showNotification('✅ All simple effects tested!');
+            this.showNotification('🔥 ALL FESTIVAL EFFECTS TESTED! READY TO RAGE!');
         } catch (error) {
-            console.error('Effect testing error:', error);
-            this.showNotification('Failed to test effects: ' + error.message, 'error');
+            console.error('Festival effect testing error:', error);
+            this.showNotification('Failed to test festival effects: ' + error.message, 'error');
         }
     }
 
-    // NEW: Test layered effects (multiple effects playing simultaneously)
+    // NEW: Test MASSIVE FESTIVAL DROPS (multiple effects simultaneously)
     async testLayeredEffects() {
         if (!this.audioEffects) {
-            this.showNotification('Audio effects not initialized!', 'error');
+            this.showNotification('Festival audio not initialized!', 'error');
             return;
         }
         
         try {
-            console.log('🎛️ Testing layered effects (multiple sounds simultaneously)...');
-            this.showNotification('🎛️ Testing LAYERED effects - multiple sounds at once!', 'info');
+            console.log('🎪 Testing MASSIVE FESTIVAL DROPS (multiple effects simultaneously)...');
+            this.showNotification('🔥 Testing MASSIVE DROPS - festival-style layering!', 'info');
             
             if (this.audioEffects.playLayeredEffects) {
-                // Test different combinations of layered effects
-                const testCombinations = [
+                // Test different festival drop combinations
+                const festivalDrops = [
                     {
-                        name: 'Hip-Hop Party',
-                        effects: ['air_horn', 'scratch', 'crowd'],
-                        volumes: [0.8, 0.6, 0.4]
+                        name: 'HARD TRAP DROP',
+                        effects: ['air_horn', 'scratch', 'impact'],
+                        volumes: [0.95, 0.85, 0.90]
                     },
                     {
-                        name: 'Electronic Drop',
+                        name: 'ELECTRONIC MADNESS',
                         effects: ['laser', 'impact', 'siren'],
-                        volumes: [0.7, 0.9, 0.5]
+                        volumes: [0.85, 0.95, 0.80]
                     },
                     {
-                        name: 'Festival Build',
-                        effects: ['crowd', 'siren', 'whoosh'],
-                        volumes: [0.6, 0.7, 0.4]
+                        name: 'FESTIVAL FINALE',
+                        effects: ['crowd', 'siren', 'air_horn'],
+                        volumes: [0.80, 0.85, 0.95]
                     }
                 ];
                 
-                for (let i = 0; i < testCombinations.length; i++) {
-                    const combo = testCombinations[i];
-                    console.log(`🎪 Testing ${combo.name}: ${combo.effects.join(' + ')}`);
-                    this.showNotification(`🎪 ${combo.name}: ${combo.effects.join(' + ').toUpperCase()}`, 'success', 2000);
+                for (let i = 0; i < festivalDrops.length; i++) {
+                    const drop = festivalDrops[i];
+                    console.log(`🔥 Testing ${drop.name}: ${drop.effects.join(' + ')}`);
+                    this.showNotification(`🎪 ${drop.name}`, 'success', 2500);
                     
-                    const success = await this.audioEffects.playLayeredEffects(combo.effects, combo.volumes);
+                    const success = await this.audioEffects.playLayeredEffects(drop.effects, drop.volumes);
                     
                     if (success) {
-                        console.log(`✅ ${combo.name} layered successfully`);
+                        console.log(`🔥 ${drop.name} WENT OFF!`);
                     } else {
-                        console.warn(`⚠️ ${combo.name} layering may have failed`);
+                        console.warn(`⚠️ ${drop.name} may have failed`);
                     }
                     
-                    // Wait between combinations
-                    if (i < testCombinations.length - 1) {
-                        await new Promise(resolve => setTimeout(resolve, 3000));
+                    // Wait between drops
+                    if (i < festivalDrops.length - 1) {
+                        await new Promise(resolve => setTimeout(resolve, 4000));
                     }
                 }
                 
-                this.showNotification('✅ Layered effects test complete! Effects can play over music!', 'success');
+                this.showNotification('🔥 MASSIVE DROPS COMPLETE! Ready for the festival!', 'success');
                 
             } else {
-                // Fallback: test effects in quick succession
-                console.log('🔄 Layered effects not available, testing rapid succession...');
-                const effects = ['air_horn', 'scratch', 'laser'];
+                // Fallback: rapid fire effects
+                console.log('🔄 Massive drops not available, testing rapid fire...');
+                const effects = ['air_horn', 'impact', 'laser'];
                 
-                this.showNotification('🎵 Testing rapid succession (layering fallback)...', 'info');
+                this.showNotification('⚡ Rapid fire festival effects...', 'info');
                 
                 effects.forEach((effect, index) => {
                     setTimeout(async () => {
                         await this.testEffect(effect);
-                    }, index * 300);
+                    }, index * 400);
                 });
                 
                 setTimeout(() => {
-                    this.showNotification('✅ Rapid succession test complete!', 'success');
-                }, 2000);
+                    this.showNotification('🔥 Rapid fire complete!', 'success');
+                }, 2500);
             }
             
         } catch (error) {
-            console.error('Layered effects test error:', error);
-            this.showNotification('❌ Layered effects test failed: ' + error.message, 'error');
+            console.error('Festival drop test error:', error);
+            this.showNotification('❌ Festival drops failed: ' + error.message, 'error');
         }
     }
 
