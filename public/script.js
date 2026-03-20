@@ -45,20 +45,31 @@ class DJMEWv2 {
         try {
             console.log('🎛️ Initializing MEW\'s legendary DJ mixing system...');
             
-            // Initialize MEW's audio effects manager
-            if (window.audioEffectsManager) {
+            // Initialize MEW's SIMPLE audio effects (much more reliable!)
+            if (window.simpleAudioEffects) {
                 this.updateAudioStatus('🔄 Loading MEW\'s legendary effects...');
-                await window.audioEffectsManager.initialize();
-                this.audioEffects = window.audioEffectsManager;
-                const effectCount = this.audioEffects.getAvailableEffects().length;
-                this.updateAudioStatus(`⚠️ ${effectCount} effects loaded! Click any button to activate audio`);
-                console.log('✅ MEW\'s audio effects system ready!');
+                const effectCount = await window.simpleAudioEffects.initialize();
+                this.audioEffects = window.simpleAudioEffects;
                 
-                // Set up user activation listener
-                this.setupAudioActivation();
+                if (effectCount > 0) {
+                    this.updateAudioStatus(`✅ ${effectCount} effects ready! No activation needed - they just work!`);
+                    console.log('✅ MEW\'s SIMPLE audio effects system ready!');
+                    
+                    // Test that audio works immediately
+                    setTimeout(async () => {
+                        const testSuccess = await this.audioEffects.testEffect('whoosh');
+                        if (testSuccess) {
+                            this.updateAudioStatus(`🔊 Audio confirmed working! MEW can make sounds!`);
+                        } else {
+                            this.updateAudioStatus(`⚠️ Audio may need user interaction - try clicking any button`);
+                        }
+                    }, 1000);
+                } else {
+                    this.updateAudioStatus('⚠️ Effects loaded but may need user interaction');
+                }
             } else {
                 this.updateAudioStatus('❌ Audio effects not available');
-                console.warn('⚠️ Audio effects manager not available');
+                console.warn('⚠️ Simple audio effects not available');
             }
             
             // Initialize Web Audio API for mixing
@@ -1070,86 +1081,8 @@ class DJMEWv2 {
         }
     }
 
-    // Set up audio activation on first user interaction
-    setupAudioActivation() {
-        // Check if audio context needs activation
-        if (this.audioEffects && this.audioEffects.audioContext && this.audioEffects.audioContext.state === 'suspended') {
-            // Show activation button
-            const activationDiv = document.getElementById('audio-activation');
-            if (activationDiv) {
-                activationDiv.style.display = 'block';
-            }
-            this.updateAudioStatus(`⚠️ Audio ready - Click "ACTIVATE AUDIO EFFECTS" to enable sounds`);
-        }
-        
-        const activateAudio = async () => {
-            try {
-                if (this.audioEffects && this.audioEffects.audioContext) {
-                    if (this.audioEffects.audioContext.state === 'suspended') {
-                        console.log('🔓 Activating audio effects with user interaction...');
-                        await this.audioEffects.audioContext.resume();
-                        this.updateAudioStatus(`✅ Audio effects ACTIVE! MEW can now play sounds!`);
-                        
-                        // Hide activation button
-                        const activationDiv = document.getElementById('audio-activation');
-                        if (activationDiv) {
-                            activationDiv.style.display = 'none';
-                        }
-                        
-                        // Play a quick test sound to confirm activation
-                        setTimeout(async () => {
-                            try {
-                                await this.audioEffects.playEffect('whoosh', 0.3);
-                                this.showNotification('🔊 Audio effects activated!', 'success');
-                            } catch (error) {
-                                console.error('Activation test failed:', error);
-                            }
-                        }, 500);
-                    }
-                }
-                
-                // Remove the listeners after first activation
-                document.removeEventListener('click', activateAudio);
-                document.removeEventListener('keydown', activateAudio);
-                
-            } catch (error) {
-                console.error('Audio activation failed:', error);
-            }
-        };
-
-        // Listen for any user interaction to activate audio
-        document.addEventListener('click', activateAudio, { once: true });
-        document.addEventListener('keydown', activateAudio, { once: true });
-        
-        console.log('🎵 Audio activation listeners set up - interaction will enable sound effects');
-    }
-
-    // Manual audio activation
-    async activateAudio() {
-        try {
-            if (this.audioEffects && this.audioEffects.audioContext) {
-                console.log('🔓 Manually activating audio effects...');
-                await this.audioEffects.audioContext.resume();
-                this.updateAudioStatus(`✅ Audio effects ACTIVE! MEW can now play sounds!`);
-                
-                // Hide activation button
-                const activationDiv = document.getElementById('audio-activation');
-                if (activationDiv) {
-                    activationDiv.style.display = 'none';
-                }
-                
-                // Play test sound to confirm
-                await this.audioEffects.playEffect('whoosh', 0.4);
-                this.showNotification('🔊 Audio effects activated! MEW can now make sounds!', 'success');
-                
-            } else {
-                throw new Error('Audio effects manager not available');
-            }
-        } catch (error) {
-            console.error('Manual audio activation failed:', error);
-            this.showNotification('❌ Failed to activate audio: ' + error.message, 'error');
-        }
-    }
+    // No complex audio activation needed with simple effects!
+    // Simple HTML5 audio just works when user interacts with the page
 
     // Activate REAL transition effect with audio - LEGENDARY DJ EFFECTS!
     async activateTransitionEffect(effect, volume = null) {
@@ -1265,33 +1198,25 @@ class DJMEWv2 {
             'mew_signature': 'effect-filter'
         };
         
-        // PLAY REAL AUDIO EFFECT!
+        // PLAY SIMPLE, RELIABLE AUDIO EFFECT!
         const audioEffectName = audioEffectMap[effect];
         if (audioEffectName && this.audioEffects) {
             try {
-                console.log(`🎬 MEW triggering REAL effect: ${audioEffectName} for ${effect}`);
+                console.log(`🎬 MEW playing SIMPLE effect: ${audioEffectName} for ${effect}`);
                 
-                // Ensure audio context is running
-                if (this.audioEffects.audioContext && this.audioEffects.audioContext.state === 'suspended') {
-                    console.log('🔓 Resuming audio context for transition effect...');
-                    await this.audioEffects.audioContext.resume();
+                // Play the effect with simple HTML5 audio (no complex Web Audio API)
+                const effectVolume = volume ? Math.min(1.0, volume * 1.1) : 0.8;
+                const success = await this.audioEffects.playEffect(audioEffectName, effectVolume);
+                
+                if (success) {
+                    console.log(`🔊 SUCCESS: ${audioEffectName} played for ${effect}`);
+                    this.showNotification(`🔊 ${audioEffectName.toUpperCase()}!`, 'success', 1000);
+                } else {
+                    console.warn(`⚠️ Effect may not have played: ${audioEffectName}`);
                 }
-                
-                // MEW intelligently ducks music volume for effect
-                this.audioEffects.duckMusic(0.4, 2000); // Duck music 40% for 2 seconds
-                
-                // Play the actual audio effect with boosted volume
-                const effectVolume = volume ? Math.min(1.0, volume * 1.2) : 0.8; // Boost volume
-                await this.audioEffects.playEffect(audioEffectName, effectVolume);
-                
-                console.log(`🔊 MEW played REAL effect: ${audioEffectName} for ${effect} (volume: ${effectVolume})`);
-                
-                // Visual feedback that audio played
-                this.showNotification(`🔊 ${audioEffectName.toUpperCase()}!`, 'success', 1000);
                 
             } catch (audioError) {
                 console.error(`❌ Audio effect failed: ${audioEffectName}`, audioError);
-                this.showNotification(`❌ Audio effect failed: ${audioEffectName}`, 'error');
             }
         } else {
             console.warn(`🔇 No audio mapping for effect: ${effect}, using visual only`);
@@ -2627,23 +2552,20 @@ class DJMEWv2 {
 
     // MEW's audio control functions
     setMusicVolume(value) {
-        const volume = value / 100;
-        if (this.audioEffects) {
-            this.audioEffects.setMusicVolume(volume);
-        }
-        
+        // Note: Simple audio effects don't control Spotify music volume
+        // Music volume is controlled by Spotify Web Player
         const valueEl = document.getElementById('music-volume-value');
         if (valueEl) {
             valueEl.textContent = `${value}%`;
         }
         
-        console.log(`🎵 Music volume set to ${value}%`);
+        console.log(`🎵 Music volume display set to ${value}% (controlled by Spotify)`);
     }
 
     setEffectsVolume(value) {
         const volume = value / 100;
-        if (this.audioEffects) {
-            this.audioEffects.setEffectsVolume(volume);
+        if (this.audioEffects && this.audioEffects.setVolume) {
+            this.audioEffects.setVolume(volume);
         }
         
         const valueEl = document.getElementById('effects-volume-value');
@@ -2651,7 +2573,7 @@ class DJMEWv2 {
             valueEl.textContent = `${value}%`;
         }
         
-        console.log(`🔊 Effects volume set to ${value}%`);
+        console.log(`🔊 Simple effects volume set to ${value}%`);
     }
 
     async testEffect(effectName) {
@@ -2661,16 +2583,17 @@ class DJMEWv2 {
         }
         
         try {
-            console.log(`🧪 Testing effect: ${effectName}`);
+            console.log(`🧪 Testing SIMPLE effect: ${effectName}`);
             
-            // Ensure audio context is active (user interaction required)
-            if (this.audioEffects.audioContext && this.audioEffects.audioContext.state === 'suspended') {
-                console.log('🔓 Activating audio context with user interaction...');
-                await this.audioEffects.audioContext.resume();
+            const success = await this.audioEffects.testEffect(effectName);
+            
+            if (success) {
+                this.showNotification(`🔊 ${effectName.toUpperCase()} played successfully!`, 'success');
+                console.log(`✅ Test successful: ${effectName}`);
+            } else {
+                this.showNotification(`⚠️ ${effectName} may need user interaction to play`, 'warning');
+                console.warn(`⚠️ Test may have failed: ${effectName}`);
             }
-            
-            await this.audioEffects.playEffect(effectName);
-            this.showNotification(`🔊 Tested effect: ${effectName}`, 'success');
         } catch (error) {
             console.error('Effect test error:', error);
             this.showNotification('Failed to play effect: ' + error.message, 'error');
@@ -2683,10 +2606,10 @@ class DJMEWv2 {
             return;
         }
         
-        this.showNotification('🧪 Testing all MEW effects...');
+        this.showNotification('🧪 Testing all simple MEW effects...');
         try {
             await this.audioEffects.testAllEffects();
-            this.showNotification('✅ All effects tested successfully!');
+            this.showNotification('✅ All simple effects tested!');
         } catch (error) {
             console.error('Effect testing error:', error);
             this.showNotification('Failed to test effects: ' + error.message, 'error');
