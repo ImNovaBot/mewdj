@@ -8,10 +8,17 @@ const WebSocket = require('ws');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Environment variables
+// Environment variables with validation
 const CLIENT_ID = process.env.SPOTIFY_CLIENT_ID;
 const CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET;
 const REDIRECT_URI = process.env.REDIRECT_URI || 'https://mewdj.onrender.com/callback';
+
+// Basic environment check
+if (!CLIENT_ID || !CLIENT_SECRET) {
+    console.warn('⚠️ Spotify credentials not configured - some features may not work');
+} else {
+    console.log('✅ Spotify credentials configured');
+}
 
 // Middleware
 app.use(express.json());
@@ -939,9 +946,20 @@ class SmartQueue {
     }
 }
 
+// Error handling middleware
+app.use((error, req, res, next) => {
+    console.error('🚨 Server error:', error);
+    res.status(500).json({ 
+        error: 'Internal server error',
+        message: error.message,
+        timestamp: new Date().toISOString()
+    });
+});
+
 // WebSocket for Real-time Updates
 const server = app.listen(PORT, () => {
     console.log(`🎧 DJ MEW v2.0 running on port ${PORT}`);
+    console.log(`🔊 Audio: Enhanced layered effects system ready!`);
 });
 
 const wss = new WebSocket.Server({ server });
