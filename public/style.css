@@ -671,9 +671,12 @@ body {
     background: linear-gradient(45deg, #1db954, #1ed760);
     color: white;
     text-decoration: none;
+    border: none;
     border-radius: 25px;
     font-weight: bold;
+    font-size: 1rem;
     margin: 20px 0;
+    cursor: pointer;
     transition: all 0.3s ease;
 }
 

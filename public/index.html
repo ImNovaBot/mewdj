@@ -212,10 +212,10 @@
             <div class="modal-content">
                 <h2>Connect to Spotify</h2>
                 <p>Connect your Spotify Premium account to unleash DJ MEW</p>
-                <a href="/login" class="connect-btn" onclick="console.log('🔗 Connecting to Spotify...'); return true;">🎵 Connect Spotify</a>
+                <button class="connect-btn" onclick="console.log('🔗 Connecting to Spotify...'); window.location.href = '/login'; return false;">🎵 Connect Spotify</button>
                 <p class="note">You need Spotify Premium for full DJ controls</p>
                 <div style="margin-top: 10px; font-size: 0.8rem; color: #a1a1aa;">
-                    🔍 Debug: Link should go to: <span style="color: #c084fc;">/login</span>
+                    🔍 Debug: <a href="/login" style="color: #c084fc; text-decoration: underline;" target="_blank">Test /login directly</a>
                 </div>
             </div>
         </div>

@@ -308,11 +308,17 @@ const mixEngine = new DJMixEngine(spotify);
 
 // Routes
 app.get('/login', (req, res) => {
-    console.log('🔗 Login endpoint hit');
+    console.log('🔗 Login endpoint hit from:', req.headers['user-agent']?.substring(0, 50));
     console.log('📊 Environment check:', {
         CLIENT_ID: CLIENT_ID ? 'Present' : 'Missing',
-        REDIRECT_URI: REDIRECT_URI
+        REDIRECT_URI: REDIRECT_URI,
+        NODE_ENV: process.env.NODE_ENV
     });
+
+    if (!CLIENT_ID) {
+        console.error('❌ CLIENT_ID missing!');
+        return res.status(500).send('Spotify CLIENT_ID not configured');
+    }
 
     const scopes = [
         'user-read-playback-state',
@@ -322,15 +328,18 @@ app.get('/login', (req, res) => {
         'playlist-read-collaborative'
     ].join(' ');
 
-    const authUrl = 'https://accounts.spotify.com/authorize?' +
-        new URLSearchParams({
-            response_type: 'code',
-            client_id: CLIENT_ID,
-            scope: scopes,
-            redirect_uri: REDIRECT_URI
-        });
+    const authParams = {
+        response_type: 'code',
+        client_id: CLIENT_ID,
+        scope: scopes,
+        redirect_uri: REDIRECT_URI
+    };
 
-    console.log('🔗 Redirecting to Spotify auth URL:', authUrl.substring(0, 100) + '...');
+    const authUrl = 'https://accounts.spotify.com/authorize?' + new URLSearchParams(authParams);
+
+    console.log('🔗 Full Spotify auth URL:', authUrl);
+    console.log('🚀 Sending redirect response...');
+    
     res.redirect(authUrl);
 });
 
