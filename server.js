@@ -281,6 +281,44 @@ class SpotifyAPI {
         }
     }
 
+    // Get Spotify's related artists (real intelligence, not hardcoded!)
+    async getRelatedArtists(artistId) {
+        try {
+            console.log(`🔗 Getting Spotify's related artists for: ${artistId}`);
+            usageStats.spotifyAPICalls++;
+            const response = await this.apiCall(`/artists/${artistId}/related-artists`);
+            return response.artists || [];
+        } catch (error) {
+            console.error(`❌ Failed to get related artists for ${artistId}:`, error);
+            return [];
+        }
+    }
+
+    // Get artist's most popular tracks (the hits everyone knows!)
+    async getArtistTopTracks(artistId, country = 'US') {
+        try {
+            console.log(`🎵 Getting top tracks for artist: ${artistId}`);
+            usageStats.spotifyAPICalls++;
+            const response = await this.apiCall(`/artists/${artistId}/top-tracks?market=${country}`);
+            return response.tracks || [];
+        } catch (error) {
+            console.error(`❌ Failed to get top tracks for ${artistId}:`, error);
+            return [];
+        }
+    }
+
+    // Get artist info for better intelligence
+    async getArtist(artistId) {
+        try {
+            usageStats.spotifyAPICalls++;
+            const response = await this.apiCall(`/artists/${artistId}`);
+            return response;
+        } catch (error) {
+            console.error(`❌ Failed to get artist ${artistId}:`, error);
+            return null;
+        }
+    }
+
     async getMultipleAudioFeatures(trackIds) {
         const idsString = trackIds.join(',');
         const response = await this.apiCall(`/audio-features?ids=${idsString}`);
@@ -1459,6 +1497,121 @@ app.post('/api/mew-auto-add', async (req, res) => {
     }
 });
 
+// NEW: MEW's Emergency Auto-Queue (keeps music going if queue is empty!)
+app.post('/api/mew-emergency-queue', async (req, res) => {
+    try {
+        console.log('🚨 EMERGENCY: Queue is empty! MEW is finding a song to keep the music going...');
+        
+        const { lastTrack } = req.body;
+        
+        if (!lastTrack) {
+            return res.status(400).json({ error: 'Need last track info for emergency queue' });
+        }
+        
+        console.log(`🎵 Last played: ${lastTrack.name} by ${lastTrack.artist || lastTrack.artists?.[0]?.name}`);
+        
+        // Create a minimal queue context from the last track for analysis
+        const contextQueue = [lastTrack];
+        
+        // Use MEW's intelligence to find a good follow-up song
+        const suggestions = await AutonomousDJ.autoFillQueue(contextQueue, spotify);
+        
+        if (suggestions.suggestions.length === 0) {
+            console.log('⚠️ MEW could not find emergency songs, using fallback search...');
+            
+            // Fallback: search for something similar to the artist
+            const artistName = lastTrack.artist || lastTrack.artists?.[0]?.name || 'popular music';
+            const fallbackQuery = `${artistName}`;
+            const fallbackResults = await spotify.searchTracks(fallbackQuery, 5);
+            
+            if (fallbackResults.length > 0) {
+                const emergencyTrack = fallbackResults[0];
+                console.log(`🆘 EMERGENCY FALLBACK: Adding ${emergencyTrack.name} by ${emergencyTrack.artist}`);
+                
+                // Add basic analysis
+                const analysis = await spotify.getAudioFeatures(emergencyTrack.id);
+                const detailedAnalysis = await spotify.getDetailedAudioAnalysis(emergencyTrack.id);
+                const structure = DJIntelligence.analyzeSongStructure(analysis, detailedAnalysis, emergencyTrack.duration_ms);
+                
+                const queueItem = {
+                    ...emergencyTrack,
+                    analysis,
+                    structure,
+                    bpm: Math.round(analysis.tempo || 120),
+                    key: SmartQueue.getKeyName(analysis.key || 0),
+                    energy: Math.round((analysis.energy || 0.5) * 100),
+                    valence: Math.round((analysis.valence || 0.5) * 100),
+                    addedAt: Date.now(),
+                    smart_start: structure.recommendations.ideal_start,
+                    smart_end: structure.recommendations.ideal_end,
+                    play_duration: structure.recommendations.play_duration,
+                    hot_cues: structure.recommendations.hot_cues,
+                    added_by: 'mew-emergency',
+                    emergency: true
+                };
+                
+                djState.queue.push(queueItem);
+                broadcast({ type: 'queue-update', queue: djState.queue });
+                
+                return res.json({
+                    success: true,
+                    message: `🚨 EMERGENCY: MEW added ${emergencyTrack.name} to keep the music going!`,
+                    emergency: true,
+                    added: queueItem
+                });
+            } else {
+                return res.status(404).json({ error: 'Could not find emergency track' });
+            }
+        }
+        
+        // Use MEW's best suggestion for emergency
+        const emergencyTrack = suggestions.suggestions[0];
+        console.log(`🆘 EMERGENCY AUTO-QUEUE: ${emergencyTrack.name} by ${emergencyTrack.artist} (${emergencyTrack.score}% match)`);
+        
+        // Add with full analysis
+        const analysis = await spotify.getAudioFeatures(emergencyTrack.id);
+        const detailedAnalysis = await spotify.getDetailedAudioAnalysis(emergencyTrack.id);
+        const structure = DJIntelligence.analyzeSongStructure(analysis, detailedAnalysis, emergencyTrack.duration_ms);
+        
+        const queueItem = {
+            ...emergencyTrack,
+            analysis,
+            structure,
+            bpm: Math.round(analysis.tempo || 120),
+            key: SmartQueue.getKeyName(analysis.key || 0),
+            energy: Math.round((analysis.energy || 0.5) * 100),
+            valence: Math.round((analysis.valence || 0.5) * 100),
+            addedAt: Date.now(),
+            smart_start: structure.recommendations.ideal_start,
+            smart_end: structure.recommendations.ideal_end,
+            play_duration: structure.recommendations.play_duration,
+            hot_cues: structure.recommendations.hot_cues,
+            added_by: 'mew-emergency',
+            vibe_match_score: emergencyTrack.score || 75,
+            search_reason: emergencyTrack.search_reason,
+            emergency: true
+        };
+        
+        djState.queue.push(queueItem);
+        incrementStat('autonomousSongsAdded');
+        
+        // Broadcast queue update
+        broadcast({ type: 'queue-update', queue: djState.queue });
+        
+        res.json({
+            success: true,
+            message: `🚨 EMERGENCY: MEW added ${emergencyTrack.name} to keep the music going! (${emergencyTrack.score}% match)`,
+            emergency: true,
+            added: queueItem,
+            reasoning: emergencyTrack.search_reason
+        });
+        
+    } catch (error) {
+        console.error('🚨 MEW emergency queue error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Get current queue vibe analysis
 app.get('/api/queue-vibe', (req, res) => {
     try {
@@ -1626,22 +1779,22 @@ class AutonomousDJ {
     static async findSongsForVibe(vibe, spotify, count = 3, currentQueue = []) {
         console.log(`🔮 MEW is analyzing your specific taste for ${count} personalized song recommendations...`);
         
-        // Enhanced search with personalized analysis
-        const searchQueries = this.generateSmartSearchQueries(vibe, currentQueue);
+        // Enhanced search with REAL Spotify intelligence
+        const searchQueries = await this.generateSmartSearchQueries(vibe, currentQueue, spotify);
         const foundTracks = [];
         
-        console.log(`🧠 MEW generated ${searchQueries.length} personalized search strategies`);
+        console.log(`🧠 MEW generated ${searchQueries.length} searches using REAL Spotify data!`);
         
-        for (const query of searchQueries.slice(0, 6)) { // Try more searches for better results
+        for (const query of searchQueries.slice(0, 8)) { // Try more searches for better results
             try {
                 console.log(`🎯 MEW searching: "${query.query}" (${query.reason})`);
                 const results = await spotify.searchTracks(query.query, 8);
                 
-                // Enhanced scoring with personalized factors
+                // Enhanced scoring with REAL Spotify intelligence
                 const scoredTracks = results
                     .map(track => ({
                         ...track,
-                        score: this.scoreTrackForVibe(track, vibe, currentQueue),
+                        score: this.scoreTrackForVibe(track, vibe, currentQueue, query),
                         search_reason: query.reason,
                         search_type: query.type || 'general',
                         confidence: query.confidence || 70
@@ -1680,168 +1833,77 @@ class AutonomousDJ {
         return uniqueTracks;
     }
 
-    static generateSmartSearchQueries(vibe, currentQueue = []) {
+    // NEW: Generate smart queries using REAL Spotify data!
+    static async generateSmartSearchQueries(vibe, currentQueue = [], spotify) {
         const queries = [];
         
-        console.log('🧠 MEW is deeply analyzing your taste...');
+        console.log('🧠 MEW is analyzing your taste with REAL Spotify intelligence...');
         
         // Extract actual artists and songs from queue for PERSONALIZED suggestions
-        const artistsInQueue = currentQueue.map(track => (track.artist || '').toLowerCase()).filter(artist => artist);
-        const songsInQueue = currentQueue.map(track => (track.name || '').toLowerCase()).filter(name => name);
+        const tracksInQueue = currentQueue.filter(track => track.artists && track.artists[0]);
+        const artistsInQueue = tracksInQueue.map(track => ({
+            name: track.artists[0].name.toLowerCase(),
+            id: track.artists[0].id
+        })).filter(artist => artist.id);
         
-        console.log(`🎵 Your artists: ${artistsInQueue.join(', ')}`);
-        console.log(`🎶 Your songs: ${songsInQueue.join(', ')}`);
+        console.log(`🎵 Your artists: ${artistsInQueue.map(a => a.name).join(', ')}`);
         
-        // 1. SIMILAR ARTIST RECOMMENDATIONS (Most Important!)
-        artistsInQueue.forEach(artist => {
-            const similarArtists = this.getSimilarArtists(artist);
-            if (similarArtists.length > 0) {
-                // Pick 2-3 random similar artists for variety
-                const selected = similarArtists.sort(() => Math.random() - 0.5).slice(0, 3);
-                selected.forEach(similarArtist => {
-                    queries.push({
-                        query: `${similarArtist}`,
-                        reason: `Similar to ${artist} (from your queue)`,
-                        type: 'similar_artist',
-                        confidence: 90
-                    });
-                });
+        // 1. SPOTIFY RELATED ARTISTS (REAL INTELLIGENCE!)
+        for (const queueArtist of artistsInQueue.slice(0, 3)) { // Limit to prevent too many API calls
+            try {
+                console.log(`🔗 Getting Spotify's related artists for: ${queueArtist.name}`);
+                const relatedArtists = await spotify.getRelatedArtists(queueArtist.id);
+                
+                // Get top tracks from the most similar artists
+                for (const relatedArtist of relatedArtists.slice(0, 4)) { // Top 4 related artists
+                    try {
+                        const topTracks = await spotify.getArtistTopTracks(relatedArtist.id);
+                        
+                        // Add searches for the artist's biggest hits
+                        if (topTracks.length > 0) {
+                            queries.push({
+                                query: `${relatedArtist.name}`,
+                                reason: `Spotify similar to ${queueArtist.name}`,
+                                type: 'spotify_related',
+                                confidence: 95,
+                                related_to: queueArtist.name,
+                                top_tracks: topTracks.slice(0, 3).map(t => t.name) // Store top track names
+                            });
+                            
+                            // Also search for specific hit songs
+                            const topHit = topTracks[0]; // Most popular track
+                            queries.push({
+                                query: `${topHit.name} ${relatedArtist.name}`,
+                                reason: `${relatedArtist.name}'s biggest hit (similar to ${queueArtist.name})`,
+                                type: 'spotify_top_track',
+                                confidence: 90,
+                                related_to: queueArtist.name
+                            });
+                        }
+                    } catch (error) {
+                        console.error(`Failed to get top tracks for ${relatedArtist.name}:`, error);
+                    }
+                }
+            } catch (error) {
+                console.error(`Failed to get related artists for ${queueArtist.name}:`, error);
             }
-        });
-        
-        // 2. SIMILAR SONG/BEAT ANALYSIS
-        songsInQueue.forEach(song => {
-            const similarTracks = this.getSimilarTracks(song);
-            similarTracks.forEach(track => {
-                queries.push({
-                    query: track,
-                    reason: `Similar beat/style to "${song}"`,
-                    type: 'similar_beat',
-                    confidence: 85
-                });
-            });
-        });
-        
-        // 3. COLLABORATIVE FILTERING (People who like X also like Y)
-        if (artistsInQueue.length >= 2) {
-            const collabRecommendations = this.getCollaborativeRecommendations(artistsInQueue);
-            collabRecommendations.forEach(rec => {
-                queries.push({
-                    query: rec.artist,
-                    reason: rec.reason,
-                    type: 'collaborative',
-                    confidence: 85
-                });
-            });
         }
         
-        // 4. FEATURE-BASED MATCHING (BPM, Energy, Valence)
-        const featureQueries = this.generateFeatureBasedQueries(vibe, artistsInQueue);
+        // 2. FEATURE-BASED MATCHING (BPM, Energy, Valence)
+        const featureQueries = this.generateFeatureBasedQueries(vibe, artistsInQueue.map(a => a.name));
         queries.push(...featureQueries);
         
-        // 5. FALLBACK GENRE QUERIES (Only if we need more)
+        // 3. GENRE-BASED SEARCHES (only if we need more)
         if (queries.length < 8) {
             const genreQueries = this.getGenreQueries(vibe);
             queries.push(...genreQueries.slice(0, 8 - queries.length));
         }
         
-        return queries.slice(0, 12); // Return best 12 personalized queries
+        console.log(`🔮 MEW generated ${queries.length} search queries using REAL Spotify intelligence!`);
+        return queries.slice(0, 12); // Return best 12 queries
     }
 
-    static getSimilarArtists(artist) {
-        const similarMap = {
-            // Hip-Hop & Rap
-            'drake': ['future', 'lil wayne', 'travis scott', 'j cole', 'big sean'],
-            'travis scott': ['don toliver', 'kid cudi', 'playboi carti', 'lil uzi vert', 'future'],
-            'kendrick lamar': ['j cole', 'joey badass', 'schoolboy q', 'isaiah rashad', 'vince staples'],
-            'j cole': ['kendrick lamar', 'big sean', 'wale', 'drake', 'bas'],
-            'future': ['young thug', 'gunna', 'lil baby', 'metro boomin', 'travis scott'],
-            'kanye west': ['kid cudi', 'pusha t', 'tyler the creator', 'jay-z', 'don toliver'],
-            'lil baby': ['gunna', 'lil durk', 'dababy', 'roddy ricch', 'polo g'],
-            'migos': ['rae sremmurd', 'lil yachty', 'young thug', '21 savage', 'quality control'],
-            '21 savage': ['metro boomin', 'offset', 'lil uzi vert', 'playboi carti', 'savage mode'],
-            'young thug': ['gunna', 'lil keed', 'future', 'travis scott', 'slime'],
-            'lil uzi vert': ['playboi carti', 'lil yachty', 'travis scott', '21 savage', 'future'],
-            'playboi carti': ['lil uzi vert', 'travis scott', 'pierre bourne', 'young nudy', 'ken carson'],
-            
-            // Reggaeton & Latin
-            'bad bunny': ['ozuna', 'j balvin', 'anuel aa', 'karol g', 'rauw alejandro'],
-            'ozuna': ['maluma', 'nicky jam', 'farruko', 'wisin', 'daddy yankee'],
-            'j balvin': ['maluma', 'sebastián yatra', 'camilo', 'manuel turizo', 'mike towers'],
-            'maluma': ['j balvin', 'ozuna', 'sebastián yatra', 'rauw alejandro', 'ricky martin'],
-            'daddy yankee': ['don omar', 'wisin y yandel', 'nicky jam', 'farruko', 'arcángel'],
-            
-            // Electronic & EDM
-            'calvin harris': ['david guetta', 'martin garrix', 'tiësto', 'zedd', 'diplo'],
-            'skrillex': ['diplo', 'major lazer', 'flume', 'odesza', 'porter robinson'],
-            'deadmau5': ['eric prydz', 'above & beyond', 'armin van buuren', 'kaskade', 'swedish house mafia'],
-            'martin garrix': ['hardwell', 'nicky romero', 'oliver heldens', 'don diablo', 'afrojack'],
-            'david guetta': ['calvin harris', 'tiësto', 'martin garrix', 'zedd', 'hardwell'],
-            'the chainsmokers': ['marshmello', 'kygo', 'zedd', 'major lazer', 'odesza'],
-            
-            // Pop & Mainstream  
-            'ariana grande': ['dua lipa', 'billie eilish', 'olivia rodrigo', 'doja cat', 'taylor swift'],
-            'the weeknd': ['bruno mars', 'post malone', 'dua lipa', 'sza', 'frank ocean'],
-            'dua lipa': ['doja cat', 'ariana grande', 'billie eilish', 'taylor swift', 'olivia rodrigo'],
-            'post malone': ['juice wrld', 'lil peep', 'xxxtentacion', 'trippie redd', 'the weeknd'],
-            'billie eilish': ['clairo', 'rex orange county', 'boy pablo', 'cuco', 'kali uchis'],
-            
-            // R&B & Neo-Soul
-            'sza': ['summer walker', 'jhené aiko', 'kali uchis', 'daniel caesar', 'frank ocean'],
-            'frank ocean': ['daniel caesar', 'the weeknd', 'miguel', 'bryson tiller', 'brent faiyaz'],
-            'daniel caesar': ['kali uchis', 'sza', 'frank ocean', 'miguel', 'summer walker'],
-            'bryson tiller': ['tory lanez', 'partynextdoor', 'the weeknd', 'miguel', 'chris brown']
-        };
-        
-        return similarMap[artist] || [];
-    }
-
-    static getSimilarTracks(song) {
-        const trackMap = {
-            'sicko mode': ['goosebumps travis scott', 'antidote travis scott', 'butterfly effect'],
-            'god\'s plan': ['in my feelings drake', 'nice for what drake', 'toosie slide'],
-            'rockstar': ['congratulations post malone', 'circles post malone', 'sunflower'],
-            'lucid dreams': ['all girls are the same', 'robbery juice wrld', 'legends'],
-            'blinding lights': ['save your tears weeknd', 'can\'t feel my face', 'starboy'],
-            'levitating': ['don\'t start now dua lipa', 'physical dua lipa', 'break my heart'],
-            'dakiti': ['la canción bad bunny', 'yo perreo sola', 'safaera'],
-            'positions': ['34+35 ariana grande', '7 rings', 'thank u next'],
-            'watermelon sugar': ['adore you harry styles', 'golden', 'treat people with kindness'],
-        };
-        
-        for (const [key, tracks] of Object.entries(trackMap)) {
-            if (song.includes(key.split(' ')[0]) || key.includes(song.split(' ')[0])) {
-                return tracks;
-            }
-        }
-        return [];
-    }
-
-    static getCollaborativeRecommendations(artists) {
-        const recommendations = [];
-        
-        // Common combinations and what fans also like
-        const combos = {
-            ['drake', 'future']: ['lil wayne', 'nicki minaj', 'young money'],
-            ['travis scott', 'future']: ['don toliver', 'playboi carti', 'lil uzi vert'],
-            ['bad bunny', 'j balvin']: ['ozuna', 'anuel aa', 'karol g'],
-            ['calvin harris', 'david guetta']: ['martin garrix', 'tiësto', 'hardwell'],
-            ['kendrick lamar', 'j cole']: ['joey badass', 'danny brown', 'vince staples']
-        };
-        
-        for (const [combo, recs] of Object.entries(combos)) {
-            if (combo.every(artist => artists.includes(artist))) {
-                recs.forEach(rec => {
-                    recommendations.push({
-                        artist: rec,
-                        reason: `Fans of ${combo.join(' + ')} love ${rec}`
-                    });
-                });
-            }
-        }
-        
-        return recommendations;
-    }
+    // REMOVED: Old hardcoded methods replaced with real Spotify intelligence!
 
     static generateFeatureBasedQueries(vibe, artists) {
         const queries = [];
@@ -1887,37 +1949,42 @@ class AutonomousDJ {
         }));
     }
 
-    static scoreTrackForVibe(track, vibe, currentQueue = []) {
+    static scoreTrackForVibe(track, vibe, currentQueue = [], query = null) {
         let score = 50; // Base score
         
         const trackName = (track.name || '').toLowerCase();
         const artistName = (track.artist || '').toLowerCase();
         const combined = `${trackName} ${artistName}`;
         
-        // PERSONALIZED SCORING: Check if artist is similar to queue artists
-        const queueArtists = currentQueue.map(t => (t.artist || '').toLowerCase());
-        let personalizedBonus = 0;
+        // SPOTIFY INTELLIGENCE BONUS: Higher scores for Spotify-driven suggestions
+        if (query) {
+            if (query.type === 'spotify_related') {
+                score += 35; // Big bonus for Spotify's related artists
+                console.log(`  🔗 SPOTIFY RELATED: ${artistName} related to ${query.related_to} (+35 points)`);
+            } else if (query.type === 'spotify_top_track') {
+                score += 30; // Big bonus for artist's biggest hits
+                console.log(`  🏆 SPOTIFY TOP TRACK: ${trackName} by ${artistName} (+30 points)`);
+            }
+        }
         
+        // PERSONALIZED SCORING: Check if artist matches queue artists
+        const queueArtists = currentQueue.map(t => {
+            if (t.artists && t.artists[0]) {
+                return t.artists[0].name.toLowerCase();
+            }
+            return (t.artist || '').toLowerCase();
+        });
+        
+        let personalizedBonus = 0;
         queueArtists.forEach(queueArtist => {
             // Direct artist match (same artist in queue)
-            if (artistName === queueArtist) {
+            if (artistName === queueArtist || artistName.includes(queueArtist) || queueArtist.includes(artistName)) {
                 personalizedBonus += 30; // Big bonus for same artist
-                console.log(`  🎯 SAME ARTIST: ${artistName} (+30 points)`);
-            } else {
-                // Check if this is a similar artist
-                const similarArtists = this.getSimilarArtists(queueArtist);
-                if (similarArtists.some(similar => artistName.includes(similar.toLowerCase()))) {
-                    personalizedBonus += 25; // Big bonus for similar artists
-                    console.log(`  🎯 SIMILAR ARTIST: ${artistName} is similar to ${queueArtist} (+25 points)`);
-                }
+                console.log(`  🎯 SAME ARTIST: ${artistName} matches ${queueArtist} (+30 points)`);
             }
         });
         
         score += personalizedBonus;
-        
-        // COLLABORATIVE FILTERING: Check if track fits user's taste patterns
-        const collaborativeBonus = this.calculateCollaborativeScore(track, currentQueue);
-        score += collaborativeBonus;
         
         // Enhanced genre matching with MORE specific keywords
         const genreKeywords = {

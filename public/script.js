@@ -1983,15 +1983,21 @@ class DJMEWv2 {
                 await this.playNextTrackWithTransition(endedTrack, nextTrack);
                 
             } else if (currentIndex >= 0) {
-                // End of queue reached
-                console.log('🏁 End of queue reached');
-                this.showNotification('🏁 Queue finished! Add more tracks or let MEW suggest some!');
+                // End of queue reached - try emergency auto-queue!
+                console.log('🏁 End of queue reached - checking emergency auto-queue...');
                 
-                // Suggest more songs after queue ends
-                if (this.state.queue.length > 2) {
-                    setTimeout(() => {
-                        this.showNotification('🤖 Want MEW to auto-add more songs for this vibe?');
-                    }, 3000);
+                try {
+                    await this.emergencyAutoQueue(endedTrack);
+                } catch (error) {
+                    console.error('❌ Emergency auto-queue failed:', error);
+                    this.showNotification('🏁 Queue finished! Add more tracks or let MEW suggest some!');
+                    
+                    // Suggest more songs after queue ends
+                    if (this.state.queue.length > 2) {
+                        setTimeout(() => {
+                            this.showNotification('🤖 Want MEW to auto-add more songs for this vibe?');
+                        }, 3000);
+                    }
                 }
             } else {
                 // Track not found in queue (might be manually started)
@@ -2013,6 +2019,65 @@ class DJMEWv2 {
                 this.handlingTrackEnd = false;
             }, 2000);
         }
+    }
+
+    // NEW: Emergency auto-queue to keep music going!
+    async emergencyAutoQueue(lastTrack) {
+        try {
+            console.log('🚨 EMERGENCY AUTO-QUEUE: Finding next song to keep music going...');
+            this.showNotification('🚨 Queue empty! MEW is finding the next song...', 'info');
+            
+            const response = await fetch('/api/mew-emergency-queue', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    lastTrack: {
+                        id: lastTrack.id,
+                        name: lastTrack.name,
+                        artist: this.getArtistName(lastTrack),
+                        artists: lastTrack.artists,
+                        duration_ms: lastTrack.duration_ms
+                    }
+                }),
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                console.log(`✅ EMERGENCY SUCCESS: Added ${result.added.name}`);
+                this.showNotification(result.message, 'success');
+                
+                // Update local queue with the new emergency track
+                await this.updateQueue();
+                
+                // Immediately start playing the emergency track
+                if (this.state.queue.length > 0) {
+                    const emergencyTrack = this.state.queue[this.state.queue.length - 1]; // Last added track
+                    console.log('🚀 Auto-starting emergency track:', emergencyTrack.name);
+                    this.state.currentTrack = emergencyTrack;
+                    await this.startTrackPlayback(emergencyTrack);
+                    this.updateNowPlaying();
+                    this.showNotification(`🎵 Auto-playing: ${emergencyTrack.name}`, 'success');
+                }
+                
+            } else {
+                console.error('❌ Emergency auto-queue failed:', result.error);
+                throw new Error(result.error || 'Emergency queue failed');
+            }
+            
+        } catch (error) {
+            console.error('❌ Emergency auto-queue error:', error);
+            throw error;
+        }
+    }
+
+    // Helper to get artist name from track
+    getArtistName(track) {
+        if (track.artist) return track.artist;
+        if (track.artists && track.artists[0]) return track.artists[0].name;
+        return 'Unknown Artist';
     }
 
     // Prepare for smooth transition (called near end of track)
