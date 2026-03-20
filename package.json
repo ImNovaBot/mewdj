@@ -1,7 +1,7 @@
 {
-  "name": "mewdj",
+  "name": "dj-mew",
   "version": "1.0.0",
-  "description": "Professional AI DJ with festival-level mixing",
+  "description": "DJ MEW - Psychic festival-level mixing with legendary powers",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

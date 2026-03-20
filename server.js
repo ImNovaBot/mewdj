@@ -586,6 +586,7 @@ async function selectTrackByMood(tracks, originalRequest) {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-    console.log(`🎧 AI DJ Server running on port ${PORT}`);
+    console.log(`🐾 DJ MEW Server running on port ${PORT}`);
     console.log(`🔗 Connect Spotify: http://localhost:${PORT}/login`);
+    console.log(`✨ Legendary psychic mixing powers: ONLINE`);
 });

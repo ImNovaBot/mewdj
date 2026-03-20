@@ -187,7 +187,7 @@ class AIdjPro {
             }
             
             this.updateSpotifyStatus(true, userInfo);
-            this.showNotification(`🎧 Welcome to MewDJ${userInfo?.display_name ? ', ' + userInfo.display_name : ''}!`);
+            this.showNotification(`🐾 Welcome to DJ MEW${userInfo?.display_name ? ', ' + userInfo.display_name : ''}!`);
             
             // Clear URL params
             window.history.replaceState({}, document.title, window.location.pathname);
@@ -436,25 +436,25 @@ class AIdjPro {
         
         if (isActive) {
             takeoverBtn.classList.remove('active');
-            takeoverBtn.textContent = '🧠 Let AI Take Over';
+            takeoverBtn.textContent = '🔮 MEW Take Control';
             this.sendCommand('ai-takeover', { enabled: false });
             this.showNotification('🤲 Manual control resumed');
         } else {
             takeoverBtn.classList.add('active');
-            takeoverBtn.textContent = '🤖 AI IN CONTROL';
+            takeoverBtn.textContent = '🐾 MEW IN CONTROL';
             this.sendCommand('ai-takeover', { enabled: true });
-            this.showNotification('🧠 AI has taken control');
+            this.showNotification('🔮 MEW has taken control with psychic powers!');
         }
     }
 
     getAISuggestion() {
         this.sendCommand('get-ai-suggestion');
-        this.showNotification('🤔 AI is thinking...');
+        this.showNotification('🔮 MEW is using psychic powers...');
     }
 
     generateSmartQueue() {
         this.sendCommand('generate-smart-queue');
-        this.showNotification('🧠 Generating smart queue...');
+        this.showNotification('✨ MEW is reading the crowd\'s energy...');
     }
 
     initSearchFeatures() {

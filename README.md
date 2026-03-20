@@ -1,6 +1,6 @@
-# AI DJ - Professional Festival-Level Mixing
+# DJ MEW - Legendary Psychic Mixing
 
-A full-featured AI DJ that mixes like the pros at festivals and big clubs.
+A legendary AI DJ with psychic powers that mixes like the pros at festivals and big clubs.
 
 ## Features
 - **Beat matching & phrase alignment**
