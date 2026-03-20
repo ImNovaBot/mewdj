@@ -241,11 +241,12 @@ body {
 }
 
 .next-track {
-    background: rgba(255, 255, 255, 0.05);
+    background: linear-gradient(145deg, rgba(45, 27, 66, 0.3), rgba(26, 13, 38, 0.5));
     border-radius: 20px;
     padding: 20px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(138, 43, 226, 0.2);
     margin-bottom: 20px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
 }
 
 .next-controls {
@@ -278,9 +279,9 @@ body {
 }
 
 .manual-btn {
-    background: rgba(255, 255, 255, 0.1);
-    color: white;
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: linear-gradient(145deg, rgba(45, 27, 66, 0.6), rgba(26, 13, 38, 0.8));
+    color: #c084fc;
+    border: 1px solid rgba(138, 43, 226, 0.3);
     padding: 10px 20px;
     border-radius: 20px;
     cursor: pointer;
@@ -289,7 +290,11 @@ body {
 }
 
 .manual-btn:hover {
-    background: rgba(255, 255, 255, 0.2);
+    background: linear-gradient(145deg, rgba(138, 43, 226, 0.4), rgba(168, 85, 247, 0.2));
+    border-color: rgba(168, 85, 247, 0.5);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 15px rgba(138, 43, 226, 0.2);
+    color: #ddd6fe;
 }
 
 .request-panel, .queue-panel, .ai-panel {
@@ -449,34 +454,87 @@ body {
 
 .suggestion-btn {
     padding: 8px 15px;
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: linear-gradient(145deg, rgba(45, 27, 66, 0.6), rgba(26, 13, 38, 0.8));
+    border: 1px solid rgba(138, 43, 226, 0.3);
     border-radius: 20px;
-    color: white;
+    color: #c084fc;
     cursor: pointer;
     font-size: 0.9rem;
+    font-weight: 500;
     transition: all 0.3s ease;
 }
 
 .suggestion-btn:hover {
-    background: rgba(255, 107, 53, 0.3);
-    border-color: rgba(255, 107, 53, 0.5);
+    background: linear-gradient(145deg, rgba(138, 43, 226, 0.4), rgba(168, 85, 247, 0.2));
+    border-color: rgba(168, 85, 247, 0.5);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 15px rgba(138, 43, 226, 0.2);
+    color: #ddd6fe;
 }
 
 .queue-controls {
     display: flex;
-    gap: 10px;
+    gap: 12px;
     margin-bottom: 20px;
     align-items: center;
+    flex-wrap: wrap;
+}
+
+.queue-controls button {
+    background: linear-gradient(145deg, rgba(45, 27, 66, 0.6), rgba(26, 13, 38, 0.8));
+    color: #c084fc;
+    border: 1px solid rgba(138, 43, 226, 0.3);
+    border-radius: 20px;
+    padding: 8px 16px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.queue-controls button:hover {
+    background: linear-gradient(145deg, rgba(138, 43, 226, 0.4), rgba(168, 85, 247, 0.2));
+    border-color: rgba(168, 85, 247, 0.5);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 15px rgba(138, 43, 226, 0.2);
+    color: #ddd6fe;
+}
+
+.queue-controls button:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 8px rgba(138, 43, 226, 0.3);
 }
 
 .queue-controls select {
-    background: rgba(0, 0, 0, 0.3);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 15px;
+    background: linear-gradient(145deg, rgba(45, 27, 66, 0.6), rgba(26, 13, 38, 0.8));
+    border: 1px solid rgba(138, 43, 226, 0.3);
+    border-radius: 20px;
     padding: 8px 15px;
-    color: white;
+    color: #c084fc;
     cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.queue-controls select:hover {
+    border-color: rgba(168, 85, 247, 0.5);
+    box-shadow: 0 4px 15px rgba(138, 43, 226, 0.2);
+}
+
+.queue-controls select:focus {
+    outline: none;
+    border-color: rgba(168, 85, 247, 0.7);
+    box-shadow: 0 0 20px rgba(168, 85, 247, 0.3);
+}
+
+.queue-controls select option {
+    background: #1a0d26;
+    color: #c084fc;
+    padding: 8px;
 }
 
 .queue-item {
