@@ -284,6 +284,9 @@ class DJMEWv2 {
         document.getElementById('optimize-queue-btn')?.addEventListener('click', () => this.optimizeQueue());
         document.getElementById('clear-queue-btn')?.addEventListener('click', () => this.clearQueue());
         
+        // MEW's autonomous capabilities
+        // (Click handlers are inline in HTML for MEW functions)
+        
         // Refresh stats periodically
         setInterval(() => this.fetchStats(), 30000); // Every 30 seconds
     }
@@ -753,35 +756,241 @@ class DJMEWv2 {
         }
     }
 
-    // Perform DJ transition between tracks
+    // Perform intelligent DJ transition with varied techniques
     async performDJTransition(fromTrack, toTrack) {
-        console.log('🎛️ MEW\'s psychic DJ powers activating...');
+        console.log('🎛️ MEW\'s legendary DJ intelligence activating...');
         console.log(`🎵 Transitioning: ${fromTrack.name} (${fromTrack.bpm} BPM) → ${toTrack.name} (${toTrack.bpm} BPM)`);
         
-        // Show transition notification
-        this.showNotification(`🔮 MEW is mixing... ${toTrack.name}`);
-        
-        // Calculate transition timing
-        const compatibility = this.calculateTransitionCompatibility(fromTrack, toTrack);
-        const transitionDuration = this.calculateTransitionDuration(fromTrack, toTrack, compatibility);
-        
-        console.log(`🧠 Transition compatibility: ${compatibility}% - Duration: ${transitionDuration/1000}s`);
-        
         try {
-            // Start playing next track (will crossfade with current)
+            // Get current queue vibe for intelligent technique selection
+            const vibeResponse = await fetch('/api/queue-vibe');
+            const { vibe } = await vibeResponse.json();
+            
+            // MEW chooses the perfect transition technique based on vibe
+            const technique = this.selectIntelligentTransition(fromTrack, toTrack, vibe);
+            
+            console.log(`🧠 MEW selected: ${technique.name} (perfect for ${vibe.mood} ${vibe.primary_genre})`);
+            
+            // Show MEW's creative decision
+            this.showNotification(`🔮 MEW: ${technique.description}`, 'dj-transition');
+            
+            // Execute the chosen technique
+            await this.executeTransitionTechnique(technique, fromTrack, toTrack);
+            
+            // Start playing next track with perfect timing
             await this.startTrackPlayback(toTrack);
             
-            // Perform visual crossfade effect
-            await this.visualCrossfade(fromTrack, toTrack, transitionDuration);
-            
-            console.log('✨ Legendary transition complete!');
-            this.showNotification(`✨ Perfect transition! ${compatibility}% compatibility`);
+            console.log(`✨ ${technique.name} complete! Legendary transition achieved!`);
+            this.showNotification(`✨ ${technique.success_message}`);
             
         } catch (error) {
-            console.error('❌ DJ transition failed:', error);
-            // Fallback to simple track change
-            await this.startTrackPlayback(toTrack);
+            console.error('❌ Advanced transition failed:', error);
+            // Fallback to basic transition
+            await this.basicTransition(fromTrack, toTrack);
         }
+    }
+
+    // Select intelligent transition technique based on vibe and tracks
+    selectIntelligentTransition(fromTrack, toTrack, vibe) {
+        const energyChange = (toTrack.energy || 50) - (fromTrack.energy || 50);
+        const bpmChange = Math.abs((toTrack.bpm || 120) - (fromTrack.bpm || 120));
+        
+        const techniques = {
+            // High-energy/party techniques
+            'air_horn_slam': {
+                name: 'Air Horn Energy Slam',
+                description: 'Building massive energy with air horn',
+                condition: vibe.mood === 'party' && energyChange > 10,
+                effects: ['air_horn', 'crowd_buildup', 'impact_slam'],
+                duration: 3000,
+                success_message: 'LEGENDARY energy slam! Crowd is going wild!'
+            },
+            
+            'laser_sweep_drop': {
+                name: 'Laser Sweep Drop',
+                description: 'Electronic laser sweep into drop',
+                condition: vibe.primary_genre === 'electronic' || vibe.primary_genre === 'high-energy-dance',
+                effects: ['laser_sweep', 'whoosh', 'electronic_drop'],
+                duration: 4000,
+                success_message: 'Perfect laser drop! Pure electronic magic!'
+            },
+            
+            'crowd_cheer_buildup': {
+                name: 'Crowd Cheer Buildup',
+                description: 'Crowd energy building into anthem',
+                condition: vibe.mood === 'party' && toTrack.energy > 70,
+                effects: ['crowd_cheer', 'applause', 'anthem_rise'],
+                duration: 5000,
+                success_message: 'Crowd erupted! Festival vibes unlocked!'
+            },
+            
+            // Smooth/feel-good techniques
+            'harmonic_flow': {
+                name: 'Harmonic Flow Transition',
+                description: 'Smooth harmonic transition',
+                condition: vibe.mood === 'uplifting' || vibe.primary_genre === 'feel-good',
+                effects: ['harmonic_rise', 'smooth_filter', 'musical_bridge'],
+                duration: 7000,
+                success_message: 'Buttery smooth transition! Perfect harmonic flow!'
+            },
+            
+            'vocal_drop_blend': {
+                name: 'Vocal Drop Blend',
+                description: 'Perfect vocal timing blend',
+                condition: vibe.primary_genre === 'feel-good' && energyChange < 10,
+                effects: ['vocal_drop', 'echo_tail', 'smooth_blend'],
+                duration: 6000,
+                success_message: 'Vocal magic! Seamless blend achieved!'
+            },
+            
+            // Chill techniques
+            'ambient_fade_bridge': {
+                name: 'Ambient Fade Bridge',
+                description: 'Dreamy ambient transition',
+                condition: vibe.mood === 'relaxed' || vibe.primary_genre === 'chill',
+                effects: ['ambient_wash', 'reverb_tail', 'soft_fade'],
+                duration: 10000,
+                success_message: 'Ethereal transition! Perfect ambient flow!'
+            },
+            
+            // High BPM change techniques
+            'tempo_bridge_effect': {
+                name: 'Tempo Bridge Effect',
+                description: 'Bridging BPM gap with style',
+                condition: bpmChange > 20,
+                effects: ['tempo_shift', 'rhythm_break', 'sync_effect'],
+                duration: 8000,
+                success_message: 'Tempo bridge mastered! BPM transition perfected!'
+            },
+            
+            // Universal techniques
+            'psychic_crossfade': {
+                name: 'Psychic Crossfade',
+                description: 'MEW\'s signature psychic blend',
+                condition: true, // Always available as fallback
+                effects: ['psychic_energy', 'crossfade_magic', 'mew_signature'],
+                duration: 6000,
+                success_message: 'Psychic crossfade complete! Pure MEW magic!'
+            }
+        };
+        
+        // Find first technique that matches conditions
+        for (const [key, technique] of Object.entries(techniques)) {
+            if (technique.condition) {
+                return { ...technique, key };
+            }
+        }
+        
+        // Fallback to psychic crossfade
+        return { ...techniques.psychic_crossfade, key: 'psychic_crossfade' };
+    }
+
+    // Execute the chosen transition technique with effects
+    async executeTransitionTechnique(technique, fromTrack, toTrack) {
+        console.log(`🎛️ Executing ${technique.name}...`);
+        
+        // Visual effects sequence
+        const effectDuration = technique.duration / technique.effects.length;
+        
+        for (let i = 0; i < technique.effects.length; i++) {
+            const effect = technique.effects[i];
+            console.log(`🎪 Applying ${effect} effect`);
+            
+            // Activate visual effect
+            this.activateTransitionEffect(effect);
+            
+            // Show crossfader movement
+            this.animateCrossfader(i / technique.effects.length);
+            
+            // Wait for effect duration
+            await new Promise(resolve => setTimeout(resolve, effectDuration));
+        }
+        
+        // Final crossfader position
+        this.animateCrossfader(1.0);
+    }
+
+    // Activate specific transition effect visually
+    activateTransitionEffect(effect) {
+        // Map effects to visual elements
+        const effectMap = {
+            'air_horn': 'effect-filter',
+            'laser_sweep': 'effect-reverb',
+            'crowd_cheer': 'effect-echo',
+            'harmonic_rise': 'effect-filter',
+            'ambient_wash': 'effect-reverb',
+            'tempo_shift': 'effect-drop',
+            'psychic_energy': 'effect-filter'
+        };
+        
+        const elementId = effectMap[effect] || 'effect-filter';
+        const effectEl = document.getElementById(elementId);
+        
+        if (effectEl) {
+            effectEl.classList.add('active');
+            setTimeout(() => {
+                effectEl.classList.remove('active');
+            }, 2000);
+        }
+        
+        // Show effect name in notification
+        const effectNames = {
+            'air_horn': '📯 AIR HORN!',
+            'laser_sweep': '🌟 LASER SWEEP!',
+            'crowd_cheer': '👥 CROWD CHEER!',
+            'harmonic_rise': '🎹 HARMONIC RISE!',
+            'ambient_wash': '🌊 AMBIENT WASH!',
+            'tempo_shift': '⚡ TEMPO SHIFT!',
+            'psychic_energy': '🔮 PSYCHIC ENERGY!'
+        };
+        
+        const notification = document.createElement('div');
+        notification.className = 'effect-popup';
+        notification.textContent = effectNames[effect] || '✨ EFFECT!';
+        notification.style.cssText = `
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: linear-gradient(45deg, #8b5cf6, #a855f7);
+            color: white;
+            padding: 20px 40px;
+            border-radius: 15px;
+            font-weight: bold;
+            font-size: 1.5rem;
+            z-index: 1000;
+            animation: effectPop 1.5s ease-out;
+        `;
+        
+        document.body.appendChild(notification);
+        
+        setTimeout(() => {
+            document.body.removeChild(notification);
+        }, 1500);
+    }
+
+    // Animate crossfader movement
+    animateCrossfader(position) {
+        const crossfader = document.getElementById('crossfader');
+        if (crossfader) {
+            crossfader.value = 50 + (position * 50); // 50 to 100
+            
+            // Add glow effect during movement
+            const container = document.querySelector('.crossfader-container');
+            if (container) {
+                container.classList.add('mixing');
+                setTimeout(() => {
+                    container.classList.remove('mixing');
+                }, 3000);
+            }
+        }
+    }
+
+    // Basic fallback transition
+    async basicTransition(fromTrack, toTrack) {
+        console.log('🔄 Using basic transition fallback');
+        await this.startTrackPlayback(toTrack);
+        this.showNotification(`🔄 Basic transition to ${toTrack.name}`);
     }
 
     // Start track playback with MEW's smart timing
@@ -1213,6 +1422,210 @@ class DJMEWv2 {
         this.updateNowPlaying();  
         this.updatePlaybackControls();
         this.updateStatsDisplay();
+    }
+
+    // MEW's autonomous song discovery
+    async mewSuggestSongs() {
+        try {
+            console.log('🔮 Asking MEW to read the vibe and suggest songs...');
+            this.showNotification('🔮 MEW is reading your vibe and finding perfect songs...');
+            
+            const response = await fetch('/api/mew-suggest-songs', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ count: 3 })
+            });
+
+            if (!response.ok) {
+                throw new Error(`MEW suggestion failed: ${response.status}`);
+            }
+
+            const result = await response.json();
+            console.log('🔮 MEW\'s vibe analysis:', result.vibe);
+            console.log('🎯 MEW\'s suggestions:', result.suggestions);
+
+            // Show vibe analysis
+            this.showVibeAnalysis(result.vibe);
+            
+            // Show suggestions in a special popup
+            this.showMEWSuggestions(result.suggestions, result.vibe);
+            
+            this.showNotification(`🔮 ${result.message} - Found ${result.suggestions.length} perfect matches!`);
+            
+        } catch (error) {
+            console.error('MEW suggestion error:', error);
+            this.showNotification('Failed to get MEW suggestions: ' + error.message, 'error');
+        }
+    }
+
+    // MEW automatically adds songs based on vibe
+    async mewAutoAdd() {
+        try {
+            console.log('🤖 MEW is autonomously building your set...');
+            this.showNotification('🤖 MEW is autonomously adding perfect songs to your set...');
+            
+            const response = await fetch('/api/mew-auto-add', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`MEW auto-add failed: ${response.status}`);
+            }
+
+            const result = await response.json();
+            console.log('🤖 MEW autonomously added:', result.added, 'tracks');
+
+            this.showNotification(`🤖 ${result.message}`);
+            
+            // Refresh queue display to show new tracks
+            this.renderQueue();
+            
+        } catch (error) {
+            console.error('MEW auto-add error:', error);
+            this.showNotification('MEW auto-add failed: ' + error.message, 'error');
+        }
+    }
+
+    // Show MEW's vibe analysis
+    showVibeAnalysis(vibe) {
+        const analysisEl = document.getElementById('current-vibe-analysis');
+        
+        if (analysisEl) {
+            analysisEl.innerHTML = `
+                <div class="vibe-analysis-content">
+                    <h4>🔮 MEW's Vibe Reading:</h4>
+                    <div class="vibe-details">
+                        <span class="vibe-tag ${vibe.primary_genre}">${vibe.primary_genre}</span>
+                        <span class="vibe-tag ${vibe.mood}">${vibe.mood}</span>
+                        <span class="vibe-tag ${vibe.energy_trend}">${vibe.energy_trend} energy</span>
+                    </div>
+                    <div class="vibe-stats">
+                        <div>Avg BPM: ${vibe.average_bpm}</div>
+                        <div>Energy: ${vibe.average_energy}%</div>
+                        <div>Vibe: ${vibe.average_valence}%</div>
+                    </div>
+                </div>
+            `;
+        } else {
+            // Create vibe analysis element if it doesn't exist
+            const newElement = document.createElement('div');
+            newElement.id = 'current-vibe-analysis';
+            newElement.className = 'vibe-analysis';
+            newElement.innerHTML = `
+                <div class="vibe-analysis-content">
+                    <h4>🔮 MEW's Vibe Reading:</h4>
+                    <div class="vibe-details">
+                        <span class="vibe-tag ${vibe.primary_genre}">${vibe.primary_genre}</span>
+                        <span class="vibe-tag ${vibe.mood}">${vibe.mood}</span>
+                        <span class="vibe-tag ${vibe.energy_trend}">${vibe.energy_trend} energy</span>
+                    </div>
+                    <div class="vibe-stats">
+                        <div>Avg BPM: ${vibe.average_bpm}</div>
+                        <div>Energy: ${vibe.average_energy}%</div>
+                        <div>Vibe: ${vibe.average_valence}%</div>
+                    </div>
+                </div>
+            `;
+            
+            // Add to intelligence panel
+            const intelligencePanel = document.querySelector('.intelligence-panel');
+            if (intelligencePanel) {
+                intelligencePanel.appendChild(newElement);
+            }
+        }
+    }
+
+    // Show MEW's song suggestions in a popup
+    showMEWSuggestions(suggestions, vibe) {
+        // Create suggestions modal
+        const modal = document.createElement('div');
+        modal.className = 'mew-suggestions-modal';
+        modal.innerHTML = `
+            <div class="mew-suggestions-content">
+                <h3>🔮 MEW's Perfect Song Suggestions</h3>
+                <p class="vibe-description">For your ${vibe.mood} ${vibe.primary_genre} vibe</p>
+                
+                <div class="suggestions-list">
+                    ${suggestions.map((track, index) => `
+                        <div class="suggestion-item">
+                            <img src="${track.image || '/placeholder-album.png'}" alt="${track.name}" class="suggestion-image">
+                            <div class="suggestion-info">
+                                <h4>${track.name}</h4>
+                                <p>${track.artist}</p>
+                                <div class="suggestion-score">${track.score || 75}% vibe match</div>
+                            </div>
+                            <button class="add-suggestion-btn" onclick="aidj.addMEWSuggestion('${track.id}', ${index})">
+                                ➕ Add
+                            </button>
+                        </div>
+                    `).join('')}
+                </div>
+                
+                <div class="suggestions-actions">
+                    <button class="suggestions-btn add-all" onclick="aidj.addAllSuggestions()">✨ Add All</button>
+                    <button class="suggestions-btn close" onclick="aidj.closeMEWSuggestions()">❌ Close</button>
+                </div>
+            </div>
+        `;
+        
+        modal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        `;
+        
+        document.body.appendChild(modal);
+        this.currentSuggestions = suggestions;
+    }
+
+    // Add specific MEW suggestion to queue
+    async addMEWSuggestion(trackId, index) {
+        try {
+            const suggestion = this.currentSuggestions[index];
+            console.log('➕ Adding MEW suggestion:', suggestion.name);
+            
+            await this.addToQueue(trackId);
+            this.showNotification(`✨ Added MEW's suggestion: ${suggestion.name}`);
+            
+        } catch (error) {
+            console.error('Add suggestion error:', error);
+            this.showNotification('Failed to add suggestion: ' + error.message, 'error');
+        }
+    }
+
+    // Add all MEW suggestions
+    async addAllSuggestions() {
+        try {
+            for (const suggestion of this.currentSuggestions) {
+                await this.addToQueue(suggestion.id);
+            }
+            this.showNotification(`✨ Added all ${this.currentSuggestions.length} MEW suggestions!`);
+            this.closeMEWSuggestions();
+        } catch (error) {
+            console.error('Add all suggestions error:', error);
+            this.showNotification('Failed to add all suggestions: ' + error.message, 'error');
+        }
+    }
+
+    // Close MEW suggestions modal
+    closeMEWSuggestions() {
+        const modal = document.querySelector('.mew-suggestions-modal');
+        if (modal) {
+            document.body.removeChild(modal);
+        }
+        this.currentSuggestions = null;
     }
 
     // Debug function to check queue state

@@ -1862,3 +1862,266 @@ body {
     border-radius: 8px;
     font-size: 0.7rem;
 }
+
+/* MEW's Autonomous DJ Buttons */
+.mew-btn {
+    background: linear-gradient(45deg, #8b5cf6, #a855f7);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    animation: psychic-glow 3s ease-in-out infinite alternate;
+}
+
+.mew-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 25px rgba(168, 85, 247, 0.6);
+}
+
+.auto-btn {
+    background: linear-gradient(45deg, #06b6d4, #0891b2);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.auto-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 20px rgba(6, 182, 212, 0.4);
+}
+
+/* Vibe Analysis Display */
+.vibe-analysis {
+    background: linear-gradient(145deg, rgba(168, 85, 247, 0.2), rgba(139, 92, 246, 0.3));
+    border: 2px solid rgba(168, 85, 247, 0.4);
+    border-radius: 12px;
+    padding: 15px;
+    margin: 15px 0;
+    animation: psychic-glow 4s ease-in-out infinite;
+}
+
+.vibe-analysis-content h4 {
+    color: #a855f7;
+    margin-bottom: 10px;
+}
+
+.vibe-details {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+}
+
+.vibe-tag {
+    padding: 4px 12px;
+    border-radius: 15px;
+    font-size: 0.8rem;
+    font-weight: bold;
+    color: white;
+}
+
+.vibe-tag.high-energy-dance { background: linear-gradient(45deg, #ef4444, #f97316); }
+.vibe-tag.electronic { background: linear-gradient(45deg, #8b5cf6, #a855f7); }
+.vibe-tag.feel-good { background: linear-gradient(45deg, #eab308, #f59e0b); }
+.vibe-tag.chill { background: linear-gradient(45deg, #06b6d4, #0891b2); }
+.vibe-tag.party { background: linear-gradient(45deg, #ec4899, #be185d); }
+.vibe-tag.energetic { background: linear-gradient(45deg, #f59e0b, #ea580c); }
+.vibe-tag.uplifting { background: linear-gradient(45deg, #22c55e, #16a34a); }
+.vibe-tag.relaxed { background: linear-gradient(45deg, #64748b, #475569); }
+.vibe-tag.building { background: linear-gradient(45deg, #f59e0b, #ea580c); }
+.vibe-tag.cooling { background: linear-gradient(45deg, #06b6d4, #0891b2); }
+.vibe-tag.neutral { background: linear-gradient(45deg, #64748b, #475569); }
+
+.vibe-stats {
+    display: flex;
+    gap: 15px;
+    font-size: 0.9rem;
+    color: #c084fc;
+}
+
+/* MEW Suggestions Modal */
+.mew-suggestions-content {
+    background: linear-gradient(145deg, rgba(0, 0, 0, 0.95), rgba(26, 13, 38, 0.95));
+    border: 2px solid rgba(168, 85, 247, 0.5);
+    border-radius: 20px;
+    padding: 30px;
+    max-width: 600px;
+    max-height: 80vh;
+    overflow-y: auto;
+    color: white;
+}
+
+.mew-suggestions-content h3 {
+    color: #a855f7;
+    text-align: center;
+    margin-bottom: 10px;
+}
+
+.vibe-description {
+    text-align: center;
+    color: #c084fc;
+    margin-bottom: 25px;
+    font-style: italic;
+}
+
+.suggestions-list {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-bottom: 25px;
+}
+
+.suggestion-item {
+    display: flex;
+    align-items: center;
+    padding: 15px;
+    background: rgba(168, 85, 247, 0.1);
+    border: 1px solid rgba(168, 85, 247, 0.3);
+    border-radius: 12px;
+    transition: all 0.3s ease;
+}
+
+.suggestion-item:hover {
+    background: rgba(168, 85, 247, 0.2);
+    transform: translateX(5px);
+}
+
+.suggestion-image {
+    width: 50px;
+    height: 50px;
+    border-radius: 8px;
+    margin-right: 15px;
+}
+
+.suggestion-info {
+    flex: 1;
+}
+
+.suggestion-info h4 {
+    margin: 0;
+    color: white;
+    font-size: 1rem;
+}
+
+.suggestion-info p {
+    margin: 5px 0;
+    color: #a1a1aa;
+    font-size: 0.9rem;
+}
+
+.suggestion-score {
+    background: linear-gradient(45deg, #22c55e, #16a34a);
+    color: white;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.7rem;
+    font-weight: bold;
+    display: inline-block;
+    margin-top: 5px;
+}
+
+.add-suggestion-btn {
+    background: linear-gradient(45deg, #1db954, #1ed760);
+    color: white;
+    border: none;
+    padding: 8px 15px;
+    border-radius: 15px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.add-suggestion-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(29, 185, 84, 0.4);
+}
+
+.suggestions-actions {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+}
+
+.suggestions-btn {
+    padding: 12px 25px;
+    border: none;
+    border-radius: 20px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.suggestions-btn.add-all {
+    background: linear-gradient(45deg, #8b5cf6, #a855f7);
+    color: white;
+}
+
+.suggestions-btn.close {
+    background: linear-gradient(45deg, #64748b, #475569);
+    color: white;
+}
+
+.suggestions-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+}
+
+/* Effect Popup Animation */
+@keyframes effectPop {
+    0% {
+        transform: translate(-50%, -50%) scale(0);
+        opacity: 0;
+    }
+    50% {
+        transform: translate(-50%, -50%) scale(1.2);
+        opacity: 1;
+    }
+    100% {
+        transform: translate(-50%, -50%) scale(1);
+        opacity: 0;
+    }
+}
+
+/* Enhanced Queue Controls Layout */
+.queue-controls {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+@media (max-width: 768px) {
+    .queue-controls {
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .queue-controls button {
+        font-size: 0.9rem;
+        padding: 8px 16px;
+    }
+    
+    .mew-suggestions-content {
+        padding: 20px;
+        margin: 10px;
+        max-height: 90vh;
+    }
+    
+    .suggestion-item {
+        flex-direction: column;
+        text-align: center;
+        gap: 10px;
+    }
+    
+    .suggestions-actions {
+        flex-direction: column;
+        gap: 10px;
+    }
+}

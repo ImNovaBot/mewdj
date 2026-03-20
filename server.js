@@ -202,8 +202,240 @@ class SpotifyAPI {
 
 const spotify = new SpotifyAPI();
 
-// MEW's DJ Intelligence - Makes Smart Song Decisions
+// MEW's Advanced DJ Intelligence - Creative Decisions & Vibe Reading
 class DJIntelligence {
+    static analyzeQueueVibe(queue) {
+        if (!queue || queue.length === 0) {
+            return {
+                primary_genre: 'unknown',
+                energy_trend: 'neutral',
+                average_bpm: 120,
+                average_energy: 0.5,
+                mood: 'neutral',
+                recommendations: []
+            };
+        }
+
+        console.log('🔮 MEW is reading the vibe of your set...');
+        
+        // Analyze overall characteristics
+        const totalEnergy = queue.reduce((sum, track) => sum + (track.analysis?.energy || 0.5), 0);
+        const totalBPM = queue.reduce((sum, track) => sum + (track.analysis?.tempo || 120), 0);
+        const totalValence = queue.reduce((sum, track) => sum + (track.analysis?.valence || 0.5), 0);
+        const totalDanceability = queue.reduce((sum, track) => sum + (track.analysis?.danceability || 0.5), 0);
+        
+        const avgEnergy = totalEnergy / queue.length;
+        const avgBPM = totalBPM / queue.length;
+        const avgValence = totalValence / queue.length;
+        const avgDanceability = totalDanceability / queue.length;
+
+        // Determine primary vibe
+        let primaryGenre = 'electronic';
+        let mood = 'neutral';
+        
+        if (avgEnergy > 0.8 && avgDanceability > 0.7) {
+            primaryGenre = 'high-energy-dance';
+            mood = 'party';
+        } else if (avgEnergy > 0.6 && avgBPM > 120) {
+            primaryGenre = 'electronic';
+            mood = 'energetic';
+        } else if (avgValence > 0.6 && avgEnergy < 0.6) {
+            primaryGenre = 'feel-good';
+            mood = 'uplifting';
+        } else if (avgEnergy < 0.4) {
+            primaryGenre = 'chill';
+            mood = 'relaxed';
+        }
+
+        // Analyze energy trend
+        let energyTrend = 'neutral';
+        if (queue.length >= 3) {
+            const firstHalf = queue.slice(0, Math.floor(queue.length / 2));
+            const secondHalf = queue.slice(Math.floor(queue.length / 2));
+            
+            const firstEnergy = firstHalf.reduce((sum, track) => sum + (track.analysis?.energy || 0.5), 0) / firstHalf.length;
+            const secondEnergy = secondHalf.reduce((sum, track) => sum + (track.analysis?.energy || 0.5), 0) / secondHalf.length;
+            
+            if (secondEnergy > firstEnergy + 0.1) energyTrend = 'building';
+            else if (secondEnergy < firstEnergy - 0.1) energyTrend = 'cooling';
+        }
+
+        const vibe = {
+            primary_genre: primaryGenre,
+            energy_trend: energyTrend,
+            average_bpm: Math.round(avgBPM),
+            average_energy: Math.round(avgEnergy * 100),
+            average_valence: Math.round(avgValence * 100),
+            mood: mood,
+            danceability: Math.round(avgDanceability * 100),
+            recommendations: this.generateVibeRecommendations(primaryGenre, mood, energyTrend, avgBPM)
+        };
+
+        console.log(`✨ MEW detected vibe: ${mood} ${primaryGenre} (${energyTrend} energy)`);
+        return vibe;
+    }
+
+    static generateVibeRecommendations(genre, mood, trend, avgBPM) {
+        const recommendations = [];
+
+        // Genre-specific song suggestions
+        const genreQueries = {
+            'high-energy-dance': ['festival electronic', 'EDM bangers', 'dance hits', 'club music'],
+            'electronic': ['electronic music', 'house music', 'techno', 'synth pop'],
+            'feel-good': ['feel good music', 'happy songs', 'uplifting tracks', 'positive vibes'],
+            'chill': ['chill music', 'ambient electronic', 'downtempo', 'relaxing tracks']
+        };
+
+        // Energy trend adjustments
+        if (trend === 'building') {
+            recommendations.push({
+                query: `high energy ${genre} ${Math.round(avgBPM + 10)} bpm`,
+                reason: 'Building energy - need higher BPM tracks'
+            });
+        } else if (trend === 'cooling') {
+            recommendations.push({
+                query: `mellow ${genre} ${Math.round(avgBPM - 5)} bpm`,
+                reason: 'Cooling down - need lower energy tracks'
+            });
+        } else {
+            recommendations.push({
+                query: genreQueries[genre]?.[0] || 'electronic music',
+                reason: `Maintaining ${mood} vibe`
+            });
+        }
+
+        return recommendations;
+    }
+
+    static selectTransitionTechnique(fromTrack, toTrack, queueVibe) {
+        console.log('🎛️ MEW is choosing the perfect transition technique...');
+        
+        const energyChange = (toTrack.analysis?.energy || 0.5) - (fromTrack.analysis?.energy || 0.5);
+        const bpmChange = Math.abs((toTrack.analysis?.tempo || 120) - (fromTrack.analysis?.tempo || 120));
+        const genre = queueVibe.primary_genre;
+        const mood = queueVibe.mood;
+
+        const techniques = [];
+
+        // Genre-specific techniques
+        if (genre === 'high-energy-dance' || mood === 'party') {
+            if (energyChange > 0.2) {
+                techniques.push('air_horn_buildup', 'crowd_cheer_transition', 'laser_sweep');
+            } else {
+                techniques.push('quick_cut_impact', 'siren_transition', 'echo_slam');
+            }
+        } else if (genre === 'electronic') {
+            techniques.push('filter_sweep', 'whoosh_transition', 'synth_stab');
+        } else if (genre === 'feel-good' || mood === 'uplifting') {
+            techniques.push('smooth_crossfade', 'harmonic_transition', 'vocal_drop');
+        } else if (genre === 'chill' || mood === 'relaxed') {
+            techniques.push('ambient_fade', 'reverb_tail', 'soft_transition');
+        }
+
+        // BPM-specific adjustments
+        if (bpmChange > 20) {
+            techniques.push('tempo_bridge', 'rhythm_break');
+        }
+
+        // Energy-specific techniques
+        if (energyChange > 0.3) {
+            techniques.push('energy_riser', 'buildup_effect');
+        } else if (energyChange < -0.3) {
+            techniques.push('energy_drop', 'breakdown_effect');
+        }
+
+        // Select random technique from appropriate options
+        const selectedTechnique = techniques[Math.floor(Math.random() * techniques.length)] || 'smooth_crossfade';
+        
+        console.log(`✨ MEW chose: ${selectedTechnique} (perfect for ${mood} ${genre})`);
+        
+        return {
+            technique: selectedTechnique,
+            duration: this.getTransitionDuration(selectedTechnique),
+            effects: this.getTransitionEffects(selectedTechnique),
+            timing: this.getTransitionTiming(selectedTechnique, fromTrack, toTrack)
+        };
+    }
+
+    static getTransitionDuration(technique) {
+        const durations = {
+            'air_horn_buildup': 3000,
+            'quick_cut_impact': 1000,
+            'filter_sweep': 6000,
+            'smooth_crossfade': 8000,
+            'ambient_fade': 10000,
+            'siren_transition': 4000,
+            'crowd_cheer_transition': 5000,
+            'laser_sweep': 4000,
+            'echo_slam': 2000,
+            'whoosh_transition': 3000,
+            'synth_stab': 1500,
+            'harmonic_transition': 7000,
+            'vocal_drop': 2000,
+            'reverb_tail': 9000,
+            'soft_transition': 12000,
+            'tempo_bridge': 8000,
+            'rhythm_break': 4000,
+            'energy_riser': 6000,
+            'buildup_effect': 5000,
+            'energy_drop': 7000,
+            'breakdown_effect': 8000
+        };
+        return durations[technique] || 6000;
+    }
+
+    static getTransitionEffects(technique) {
+        const effectMap = {
+            'air_horn_buildup': ['air_horn', 'crowd_buildup', 'impact'],
+            'quick_cut_impact': ['gunshot', 'impact'],
+            'filter_sweep': ['filter_sweep', 'whoosh'],
+            'smooth_crossfade': ['reverb_tail', 'subtle_filter'],
+            'ambient_fade': ['reverb_tail', 'echo_fade'],
+            'siren_transition': ['siren', 'rising_effect'],
+            'crowd_cheer_transition': ['crowd_cheer', 'applause'],
+            'laser_sweep': ['laser', 'sweep'],
+            'echo_slam': ['echo', 'impact', 'slam'],
+            'whoosh_transition': ['whoosh', 'wind'],
+            'synth_stab': ['synth_stab', 'electronic_hit'],
+            'harmonic_transition': ['harmonic_rise', 'musical_transition'],
+            'vocal_drop': ['vocal_effect', 'voice_drop'],
+            'reverb_tail': ['reverb', 'echo_tail'],
+            'soft_transition': ['soft_fade', 'ambient'],
+            'tempo_bridge': ['tempo_shift', 'rhythm_effect'],
+            'rhythm_break': ['break_effect', 'pause'],
+            'energy_riser': ['riser', 'buildup'],
+            'buildup_effect': ['tension_build', 'energy_rise'],
+            'energy_drop': ['drop_effect', 'impact'],
+            'breakdown_effect': ['breakdown', 'filter_drop']
+        };
+        return effectMap[technique] || ['crossfade'];
+    }
+
+    static getTransitionTiming(technique, fromTrack, toTrack) {
+        // Calculate optimal timing based on technique and song structure
+        const fastTechniques = ['quick_cut_impact', 'gunshot', 'echo_slam', 'synth_stab'];
+        const buildupTechniques = ['air_horn_buildup', 'siren_transition', 'energy_riser'];
+        
+        if (fastTechniques.includes(technique)) {
+            return {
+                prep_time: 500,   // Very quick preparation
+                effect_start: 0,  // Effect starts immediately
+                track_change: 1000 // Quick track change
+            };
+        } else if (buildupTechniques.includes(technique)) {
+            return {
+                prep_time: 2000,  // Build anticipation
+                effect_start: 1000, // Effect starts early
+                track_change: 3000  // Track changes after buildup
+            };
+        } else {
+            return {
+                prep_time: 1000,
+                effect_start: 500,
+                track_change: 2000
+            };
+        }
+    }
     static analyzeSongStructure(audioFeatures, detailedAnalysis, duration_ms) {
         console.log('🧠 MEW is analyzing song structure...');
         
@@ -937,6 +1169,100 @@ app.get('/api/dj-analysis/:trackId', async (req, res) => {
     }
 });
 
+// MEW reads the vibe and suggests songs
+app.post('/api/mew-suggest-songs', async (req, res) => {
+    try {
+        console.log('🔮 MEW is analyzing your vibe and finding perfect songs...');
+        
+        const currentQueue = djState.queue || [];
+        const { count = 3 } = req.body;
+        
+        // Let MEW analyze and suggest
+        const suggestions = await AutonomousDJ.autoFillQueue(currentQueue, spotify);
+        
+        console.log(`✨ MEW found ${suggestions.suggestions.length} songs for ${suggestions.vibe.mood} vibe`);
+        
+        res.json({
+            success: true,
+            vibe: suggestions.vibe,
+            suggestions: suggestions.suggestions,
+            reasoning: suggestions.reasoning,
+            message: `🔮 MEW detected ${suggestions.vibe.mood} ${suggestions.vibe.primary_genre} vibe`
+        });
+        
+    } catch (error) {
+        console.error('🚨 MEW suggestion error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// MEW automatically adds suggested songs to queue
+app.post('/api/mew-auto-add', async (req, res) => {
+    try {
+        console.log('🤖 MEW is autonomously building your set...');
+        
+        const currentQueue = djState.queue || [];
+        const suggestions = await AutonomousDJ.autoFillQueue(currentQueue, spotify);
+        
+        // Add MEW's suggestions to queue with analysis
+        for (const track of suggestions.suggestions.slice(0, 2)) { // Add top 2
+            try {
+                const analysis = await spotify.getAudioFeatures(track.id);
+                const detailedAnalysis = await spotify.getDetailedAudioAnalysis(track.id);
+                const structure = DJIntelligence.analyzeSongStructure(analysis, detailedAnalysis, track.duration_ms);
+                
+                const queueItem = {
+                    ...track,
+                    analysis,
+                    structure,
+                    bpm: Math.round(analysis.tempo || 120),
+                    key: SmartQueue.getKeyName(analysis.key || 0),
+                    energy: Math.round((analysis.energy || 0.5) * 100),
+                    valence: Math.round((analysis.valence || 0.5) * 100),
+                    addedAt: Date.now(),
+                    smart_start: structure.recommendations.ideal_start,
+                    smart_end: structure.recommendations.ideal_end,
+                    play_duration: structure.recommendations.play_duration,
+                    hot_cues: structure.recommendations.hot_cues,
+                    added_by: 'mew',
+                    vibe_match_score: track.score || 75
+                };
+                
+                djState.queue.push(queueItem);
+                console.log(`✨ MEW added: ${track.name} (${track.score || 75}% vibe match)`);
+            } catch (error) {
+                console.error(`Failed to add ${track.name}:`, error);
+            }
+        }
+        
+        // Broadcast queue update
+        broadcast({ type: 'queue-update', queue: djState.queue });
+        
+        res.json({
+            success: true,
+            added: suggestions.suggestions.slice(0, 2).length,
+            vibe: suggestions.vibe,
+            reasoning: suggestions.reasoning,
+            message: `🤖 MEW autonomously added ${suggestions.suggestions.slice(0, 2).length} perfect tracks!`
+        });
+        
+    } catch (error) {
+        console.error('🚨 MEW auto-add error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get current queue vibe analysis
+app.get('/api/queue-vibe', (req, res) => {
+    try {
+        const vibe = DJIntelligence.analyzeQueueVibe(djState.queue || []);
+        res.json({ success: true, vibe });
+    } catch (error) {
+        console.error('Vibe analysis error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Test audio features endpoint
 app.get('/api/test-audio-features/:trackId', async (req, res) => {
     try {
@@ -976,6 +1302,178 @@ app.get('/api/spotify-token', (req, res) => {
     res.json({ access_token: spotify.token });
 });
 
-console.log('🔮 DJ MEW v2.0 - Smart Queue Master ready!');
-console.log('✨ Features: Smart search, beat matching, intelligent queue optimization');
-console.log('🎯 Focus: Reliability, music intelligence, perfect transitions');
+// MEW's Autonomous DJ System - Finds Perfect Songs
+class AutonomousDJ {
+    static async findSongsForVibe(vibe, spotify, count = 3) {
+        console.log(`🔮 MEW is hunting for ${count} songs to match your ${vibe.mood} ${vibe.primary_genre} vibe...`);
+        
+        const searchQueries = this.generateSmartSearchQueries(vibe);
+        const foundTracks = [];
+        
+        for (const query of searchQueries.slice(0, 3)) { // Try up to 3 different searches
+            try {
+                console.log(`🎯 MEW searching: "${query.query}"`);
+                const results = await spotify.searchTracks(query.query, 10);
+                
+                // Filter and score results based on vibe compatibility
+                const scoredTracks = results
+                    .map(track => ({
+                        ...track,
+                        score: this.scoreTrackForVibe(track, vibe)
+                    }))
+                    .filter(track => track.score > 60) // Only good matches
+                    .sort((a, b) => b.score - a.score); // Best first
+                
+                // Add top tracks from this search
+                foundTracks.push(...scoredTracks.slice(0, 2));
+                
+                if (foundTracks.length >= count) break;
+            } catch (error) {
+                console.error('Search error:', error);
+            }
+        }
+        
+        // Remove duplicates and return best matches
+        const uniqueTracks = foundTracks.filter((track, index, self) =>
+            index === self.findIndex(t => t.id === track.id)
+        ).slice(0, count);
+        
+        console.log(`✨ MEW found ${uniqueTracks.length} perfect tracks for the vibe!`);
+        return uniqueTracks;
+    }
+
+    static generateSmartSearchQueries(vibe) {
+        const queries = [];
+        
+        // Base genre queries
+        const genreQueries = {
+            'high-energy-dance': [
+                'festival EDM bangers',
+                'high energy electronic dance',
+                'club hits electronic',
+                'dance music energy'
+            ],
+            'electronic': [
+                'electronic music hits',
+                'synth pop electronic',
+                'house music tracks',
+                'electronic beats'
+            ],
+            'feel-good': [
+                'feel good music happy',
+                'uplifting positive songs',
+                'happy electronic music',
+                'good vibes music'
+            ],
+            'chill': [
+                'chill electronic ambient',
+                'downtempo relaxing music',
+                'ambient electronic chill',
+                'mellow electronic'
+            ]
+        };
+
+        // Energy-specific modifiers
+        const energyModifiers = {
+            'building': ['high energy', 'intense', 'powerful', 'energetic'],
+            'cooling': ['mellow', 'calm', 'relaxed', 'smooth'],
+            'neutral': ['steady', 'consistent', 'flowing']
+        };
+
+        // BPM-specific additions
+        let bpmRange = '';
+        if (vibe.average_bpm > 130) bpmRange = 'fast tempo';
+        else if (vibe.average_bpm < 100) bpmRange = 'slow tempo';
+        else bpmRange = 'medium tempo';
+
+        // Generate combination queries
+        const baseQueries = genreQueries[vibe.primary_genre] || genreQueries['electronic'];
+        const energyMods = energyModifiers[vibe.energy_trend] || energyModifiers['neutral'];
+
+        baseQueries.forEach((base, index) => {
+            if (index < energyMods.length) {
+                queries.push({
+                    query: `${energyMods[index]} ${base} ${bpmRange}`,
+                    reason: `${vibe.energy_trend} energy ${vibe.primary_genre}`
+                });
+            } else {
+                queries.push({
+                    query: `${base} ${bpmRange}`,
+                    reason: `${vibe.primary_genre} vibe match`
+                });
+            }
+        });
+
+        return queries;
+    }
+
+    static scoreTrackForVibe(track, vibe) {
+        let score = 50; // Base score
+        
+        // This is a simplified scoring - in reality we'd need audio features
+        // For now, use track name/artist heuristics
+        
+        const trackName = (track.name || '').toLowerCase();
+        const artistName = (track.artist || '').toLowerCase();
+        const combined = `${trackName} ${artistName}`;
+        
+        // Genre matching keywords
+        const genreKeywords = {
+            'high-energy-dance': ['dance', 'remix', 'festival', 'club', 'energy', 'party'],
+            'electronic': ['electronic', 'synth', 'house', 'techno', 'beat', 'mix'],
+            'feel-good': ['happy', 'good', 'love', 'feel', 'positive', 'up'],
+            'chill': ['chill', 'ambient', 'mellow', 'soft', 'calm', 'relax']
+        };
+
+        // Mood matching keywords
+        const moodKeywords = {
+            'party': ['party', 'dance', 'club', 'wild', 'crazy'],
+            'energetic': ['energy', 'power', 'intense', 'strong'],
+            'uplifting': ['up', 'rise', 'lift', 'high', 'bright'],
+            'relaxed': ['calm', 'peace', 'soft', 'gentle', 'quiet']
+        };
+
+        // Score based on genre match
+        const genreWords = genreKeywords[vibe.primary_genre] || [];
+        genreWords.forEach(keyword => {
+            if (combined.includes(keyword)) score += 15;
+        });
+
+        // Score based on mood match  
+        const moodWords = moodKeywords[vibe.mood] || [];
+        moodWords.forEach(keyword => {
+            if (combined.includes(keyword)) score += 10;
+        });
+
+        // Bonus for popular artists in genre
+        if (vibe.primary_genre === 'electronic') {
+            const electronicArtists = ['avicii', 'calvin harris', 'deadmau5', 'skrillex', 'martin garrix'];
+            electronicArtists.forEach(artist => {
+                if (artistName.includes(artist)) score += 20;
+            });
+        }
+
+        return Math.min(100, score); // Cap at 100
+    }
+
+    static async autoFillQueue(currentQueue, spotify) {
+        console.log('🤖 MEW is analyzing your vibe and finding perfect songs...');
+        
+        // Analyze current vibe
+        const vibe = DJIntelligence.analyzeQueueVibe(currentQueue);
+        
+        // Find complementary tracks
+        const suggestedTracks = await this.findSongsForVibe(vibe, spotify, 3);
+        
+        return {
+            vibe: vibe,
+            suggestions: suggestedTracks,
+            reasoning: `Found ${suggestedTracks.length} tracks that match your ${vibe.mood} ${vibe.primary_genre} vibe`
+        };
+    }
+}
+
+console.log('🔮 DJ MEW v2.0 - Legendary AI DJ ready!');
+console.log('✨ Features: Smart search, beat matching, intelligent transitions, autonomous song discovery');
+console.log('🎯 Focus: Musical intelligence, creative decisions, perfect vibes');
+console.log('🤖 New: MEW can read vibes and find perfect songs autonomously!');
