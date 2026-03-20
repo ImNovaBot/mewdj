@@ -65,6 +65,16 @@ class AIdjPro {
                 this.updateAIInsights(data);
                 break;
                 
+            case 'spotify-refreshed':
+                this.updateSpotifyStatus(true, data.userInfo);
+                this.showNotification('✨ Spotify connection refreshed');
+                break;
+                
+            case 'spotify-disconnected':
+                this.updateSpotifyStatus(false);
+                this.showNotification('👋 Disconnected from Spotify');
+                break;
+                
             case 'error':
                 this.showNotification(`❌ ${data.message}`, 'error');
                 break;
@@ -161,7 +171,23 @@ class AIdjPro {
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get('authenticated') === 'true') {
             this.hideConnectionPanel();
-            this.updateSpotifyStatus(true);
+            
+            // Parse user info if available
+            const userParam = urlParams.get('user');
+            let userInfo = null;
+            if (userParam) {
+                try {
+                    userInfo = JSON.parse(decodeURIComponent(userParam));
+                } catch (e) {
+                    console.error('Failed to parse user info:', e);
+                }
+            }
+            
+            this.updateSpotifyStatus(true, userInfo);
+            this.showNotification(`🎧 Welcome to MewDJ${userInfo?.display_name ? ', ' + userInfo.display_name : ''}!`);
+            
+            // Clear URL params
+            window.history.replaceState({}, document.title, window.location.pathname);
         } else if (urlParams.get('error')) {
             this.showNotification('❌ Spotify connection failed', 'error');
         }
@@ -176,14 +202,66 @@ class AIdjPro {
         // Update UI connection indicators
     }
 
-    updateSpotifyStatus(connected) {
+    updateSpotifyStatus(connected, userInfo = null) {
         const statusEl = document.getElementById('spotify-status');
+        const tooltip = document.getElementById('spotify-tooltip');
+        
         if (connected) {
-            statusEl.textContent = '✅ Spotify Connected';
-            statusEl.style.color = '#1db954';
+            statusEl.innerHTML = `✅ Spotify Connected
+                <div class="spotify-status-tooltip" id="spotify-tooltip">
+                    <div class="spotify-user-info">
+                        <img id="user-avatar" src="${userInfo?.images?.[0]?.url || 'https://via.placeholder.com/40x40?text=User'}" alt="User">
+                        <div class="spotify-user-details">
+                            <h4 id="user-name">${userInfo?.display_name || 'Spotify User'}</h4>
+                            <p id="user-subscription">${userInfo?.product === 'premium' ? 'Spotify Premium ✨' : 'Spotify Free'}</p>
+                        </div>
+                    </div>
+                    <div class="spotify-actions">
+                        <button class="tooltip-btn refresh" onclick="aidj.refreshSpotifyConnection()">🔄 Refresh</button>
+                        <button class="tooltip-btn signout" onclick="aidj.signOutSpotify()">🚪 Sign Out</button>
+                    </div>
+                </div>`;
+            statusEl.style.color = '#a855f7';
+            statusEl.style.animation = 'psychic-pulse 2s ease-in-out infinite';
+            
+            // Fetch user info if not provided
+            if (!userInfo) {
+                this.fetchSpotifyUserInfo();
+            }
         } else {
-            statusEl.textContent = '❌ Not Connected';
-            statusEl.style.color = '#ff4444';
+            statusEl.innerHTML = '❌ Not Connected';
+            statusEl.style.color = '#ef4444';
+            statusEl.style.animation = 'none';
+        }
+    }
+    
+    async fetchSpotifyUserInfo() {
+        try {
+            const response = await fetch('/api/spotify/me');
+            if (response.ok) {
+                const userInfo = await response.json();
+                this.updateSpotifyStatus(true, userInfo);
+            }
+        } catch (error) {
+            console.error('Failed to fetch user info:', error);
+        }
+    }
+    
+    refreshSpotifyConnection() {
+        this.showNotification('🔄 Refreshing Spotify connection...');
+        this.sendCommand('refresh-spotify');
+    }
+    
+    signOutSpotify() {
+        if (confirm('Sign out of Spotify? You\'ll need to reconnect to continue DJing.')) {
+            this.sendCommand('spotify-signout');
+            this.updateSpotifyStatus(false);
+            this.showNotification('👋 Signed out of Spotify');
+            
+            // Show connection modal after a delay
+            setTimeout(() => {
+                document.getElementById('connection-panel').style.display = 'flex';
+            }, 1500);
         }
     }
 

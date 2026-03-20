@@ -259,7 +259,15 @@ app.get('/callback', async (req, res) => {
     const { code } = req.query;
     try {
         const tokens = await spotify.authenticate(code);
-        res.redirect('/?authenticated=true');
+        
+        // Fetch user info after successful authentication
+        try {
+            const userInfo = await spotify.apiCall('/me');
+            res.redirect(`/?authenticated=true&user=${encodeURIComponent(JSON.stringify(userInfo))}`);
+        } catch (userError) {
+            console.error('Failed to fetch user info:', userError);
+            res.redirect('/?authenticated=true');
+        }
     } catch (error) {
         console.error('Auth error:', error);
         res.redirect('/?error=auth_failed');
@@ -301,6 +309,34 @@ app.get('/api/state', (req, res) => {
     res.json(djState);
 });
 
+// Get current Spotify user info
+app.get('/api/spotify/me', async (req, res) => {
+    try {
+        if (!spotify.token) {
+            return res.status(401).json({ error: 'Not authenticated' });
+        }
+        
+        const userInfo = await spotify.apiCall('/me');
+        res.json(userInfo);
+    } catch (error) {
+        console.error('Error fetching user info:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Sign out from Spotify
+app.post('/api/spotify/signout', (req, res) => {
+    spotify.token = null;
+    djState.accessToken = null;
+    djState.isPlaying = false;
+    djState.currentTrack = null;
+    
+    // Broadcast state update
+    broadcast({ type: 'spotify-disconnected' });
+    
+    res.json({ success: true, message: 'Signed out successfully' });
+});
+
 // WebSocket for real-time updates
 wss.on('connection', (ws) => {
     console.log('DJ client connected');
@@ -325,6 +361,32 @@ wss.on('connection', (ws) => {
                 case 'request-song':
                     // AI will process this and add to queue intelligently
                     await handleSongRequest(data.request);
+                    break;
+                    
+                case 'refresh-spotify':
+                    // Refresh Spotify connection
+                    if (spotify.token) {
+                        try {
+                            const userInfo = await spotify.apiCall('/me');
+                            ws.send(JSON.stringify({ 
+                                type: 'spotify-refreshed', 
+                                userInfo: userInfo 
+                            }));
+                        } catch (error) {
+                            ws.send(JSON.stringify({ 
+                                type: 'error', 
+                                message: 'Failed to refresh Spotify connection' 
+                            }));
+                        }
+                    }
+                    break;
+                    
+                case 'spotify-signout':
+                    spotify.token = null;
+                    djState.accessToken = null;
+                    djState.isPlaying = false;
+                    djState.currentTrack = null;
+                    broadcast({ type: 'spotify-disconnected' });
                     break;
             }
         } catch (error) {

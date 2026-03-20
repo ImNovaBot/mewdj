@@ -11,8 +11,22 @@
         <header class="booth-header">
             <h1>🎧 AI DJ Pro</h1>
             <div class="connection-status">
-                <span id="spotify-status">❌ Not Connected</span>
-                <span id="ai-status">🤖 AI Ready</span>
+                <span id="spotify-status">❌ Not Connected
+                    <div class="spotify-status-tooltip" id="spotify-tooltip">
+                        <div class="spotify-user-info">
+                            <img id="user-avatar" src="" alt="User">
+                            <div class="spotify-user-details">
+                                <h4 id="user-name">Loading...</h4>
+                                <p id="user-subscription">Spotify Premium</p>
+                            </div>
+                        </div>
+                        <div class="spotify-actions">
+                            <button class="tooltip-btn refresh" onclick="aidj.refreshSpotifyConnection()">🔄 Refresh</button>
+                            <button class="tooltip-btn signout" onclick="aidj.signOutSpotify()">🚪 Sign Out</button>
+                        </div>
+                    </div>
+                </span>
+                <span id="ai-status">🧠 MewDJ AI Ready</span>
             </div>
         </header>
 
