@@ -325,7 +325,10 @@ app.get('/login', (req, res) => {
         'user-modify-playback-state',
         'user-read-currently-playing',
         'playlist-read-private',
-        'playlist-read-collaborative'
+        'playlist-read-collaborative',
+        'streaming',
+        'user-read-email',
+        'user-read-private'
     ].join(' ');
 
     const authParams = {
