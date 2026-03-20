@@ -308,6 +308,12 @@ const mixEngine = new DJMixEngine(spotify);
 
 // Routes
 app.get('/login', (req, res) => {
+    console.log('🔗 Login endpoint hit');
+    console.log('📊 Environment check:', {
+        CLIENT_ID: CLIENT_ID ? 'Present' : 'Missing',
+        REDIRECT_URI: REDIRECT_URI
+    });
+
     const scopes = [
         'user-read-playback-state',
         'user-modify-playback-state',
@@ -324,6 +330,7 @@ app.get('/login', (req, res) => {
             redirect_uri: REDIRECT_URI
         });
 
+    console.log('🔗 Redirecting to Spotify auth URL:', authUrl.substring(0, 100) + '...');
     res.redirect(authUrl);
 });
 

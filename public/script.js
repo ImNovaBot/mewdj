@@ -178,10 +178,6 @@ class AIdjPro {
         });
 
         // AI controls
-        document.getElementById('ai-takeover').addEventListener('click', () => {
-            this.enableAITakeover();
-        });
-        
         document.getElementById('ai-suggest').addEventListener('click', () => {
             this.getAISuggestion();
         });

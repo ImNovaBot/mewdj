@@ -86,6 +86,7 @@
                 <button onclick="aidj.testTracking('claude')" style="margin: 0 5px; padding: 4px 8px; font-size: 0.8rem; background: rgba(138, 43, 226, 0.3); border: 1px solid rgba(138, 43, 226, 0.5); border-radius: 8px; color: #c084fc; cursor: pointer;">+100 Tokens</button>
                 <button onclick="aidj.testTracking('spotify')" style="margin: 0 5px; padding: 4px 8px; font-size: 0.8rem; background: rgba(138, 43, 226, 0.3); border: 1px solid rgba(138, 43, 226, 0.5); border-radius: 8px; color: #c084fc; cursor: pointer;">+5 API</button>
                 <button onclick="aidj.checkAuthStatus()" style="margin: 0 5px; padding: 4px 8px; font-size: 0.8rem; background: rgba(29, 185, 84, 0.3); border: 1px solid rgba(29, 185, 84, 0.5); border-radius: 8px; color: #1db954; cursor: pointer;">Check Auth</button>
+                <button onclick="window.location.href='/login'" style="margin: 0 5px; padding: 4px 8px; font-size: 0.8rem; background: rgba(29, 185, 84, 0.6); border: 1px solid rgba(29, 185, 84, 0.7); border-radius: 8px; color: #ffffff; cursor: pointer;">Force Login</button>
             </div>
         </div>
 
@@ -211,8 +212,11 @@
             <div class="modal-content">
                 <h2>Connect to Spotify</h2>
                 <p>Connect your Spotify Premium account to unleash DJ MEW</p>
-                <a href="/login" class="connect-btn">🎵 Connect Spotify</a>
+                <a href="/login" class="connect-btn" onclick="console.log('🔗 Connecting to Spotify...'); return true;">🎵 Connect Spotify</a>
                 <p class="note">You need Spotify Premium for full DJ controls</p>
+                <div style="margin-top: 10px; font-size: 0.8rem; color: #a1a1aa;">
+                    🔍 Debug: Link should go to: <span style="color: #c084fc;">/login</span>
+                </div>
             </div>
         </div>
     </div>
