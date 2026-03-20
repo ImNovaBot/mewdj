@@ -116,14 +116,50 @@ class SpotifyAPI {
             return cached;
         }
 
-        console.log(`📊 Analyzing track: ${trackId}`);
-        const features = await this.apiCall(`/audio-features/${trackId}`);
-        
-        // Cache the analysis
-        djState.analysisCache.set(trackId, features);
-        usageStats.songsAnalyzed++;
-        
-        return features;
+        try {
+            console.log(`📊 Analyzing track: ${trackId}`);
+            const features = await this.apiCall(`/audio-features/${trackId}`);
+            
+            // Handle case where Spotify returns null for some tracks
+            if (!features || !features.tempo) {
+                console.log(`⚠️ No audio features available for ${trackId}, using defaults`);
+                const defaultFeatures = {
+                    tempo: 120,
+                    key: 0,
+                    energy: 0.5,
+                    valence: 0.5,
+                    danceability: 0.5,
+                    acousticness: 0.5,
+                    instrumentalness: 0.5,
+                    speechiness: 0.5,
+                    liveness: 0.5
+                };
+                djState.analysisCache.set(trackId, defaultFeatures);
+                return defaultFeatures;
+            }
+            
+            // Cache the analysis
+            djState.analysisCache.set(trackId, features);
+            usageStats.songsAnalyzed++;
+            
+            return features;
+        } catch (error) {
+            console.error(`❌ Failed to get audio features for ${trackId}:`, error);
+            // Return default features instead of throwing
+            const defaultFeatures = {
+                tempo: 120,
+                key: 0,
+                energy: 0.5,
+                valence: 0.5,
+                danceability: 0.5,
+                acousticness: 0.5,
+                instrumentalness: 0.5,
+                speechiness: 0.5,
+                liveness: 0.5
+            };
+            djState.analysisCache.set(trackId, defaultFeatures);
+            return defaultFeatures;
+        }
     }
 
     async getMultipleAudioFeatures(trackIds) {
@@ -362,30 +398,47 @@ app.post('/api/add-to-queue', async (req, res) => {
     try {
         const { track } = req.body;
         
-        // Get audio analysis for the track
+        if (!track || !track.id) {
+            return res.status(400).json({ error: 'Invalid track data' });
+        }
+        
+        console.log(`➕ Adding to queue: ${track.name} by ${track.artist}`);
+        
+        // Get audio analysis for the track (with error handling)
         const analysis = await spotify.getAudioFeatures(track.id);
         
         const queueItem = {
             ...track,
             analysis,
-            bpm: Math.round(analysis.tempo),
-            key: SmartQueue.getKeyName(analysis.key),
-            energy: Math.round(analysis.energy * 100),
-            valence: Math.round(analysis.valence * 100),
+            bpm: Math.round(analysis.tempo || 120),
+            key: SmartQueue.getKeyName(analysis.key || 0),
+            energy: Math.round((analysis.energy || 0.5) * 100),
+            valence: Math.round((analysis.valence || 0.5) * 100),
             addedAt: Date.now()
         };
         
         djState.queue.push(queueItem);
         
-        console.log(`➕ Added to queue: ${track.name} (${queueItem.bpm} BPM, ${queueItem.key} key)`);
+        console.log(`✅ Successfully added: ${track.name} (${queueItem.bpm} BPM, ${queueItem.key} key)`);
         
         // Broadcast update
         broadcast({ type: 'queue-update', queue: djState.queue });
         
         res.json({ success: true, item: queueItem, queueLength: djState.queue.length });
+        
     } catch (error) {
-        console.error('Add to queue error:', error);
-        res.status(500).json({ error: error.message });
+        console.error('🚨 Add to queue error:', {
+            error: error.message,
+            stack: error.stack?.split('\n')[0],
+            track: req.body?.track?.name
+        });
+        
+        // More specific error messages
+        if (error.message.includes('token')) {
+            res.status(401).json({ error: 'Spotify connection expired. Please reconnect.' });
+        } else {
+            res.status(500).json({ error: `Failed to add song: ${error.message}` });
+        }
     }
 });
 
@@ -439,6 +492,22 @@ app.get('/api/usage-stats', (req, res) => {
     usageStats.renderHours = uptimeHours;
     
     res.json(usageStats);
+});
+
+// Test audio features endpoint
+app.get('/api/test-audio-features/:trackId', async (req, res) => {
+    try {
+        const { trackId } = req.params;
+        console.log('🧪 Testing audio features for:', trackId);
+        
+        const features = await spotify.getAudioFeatures(trackId);
+        console.log('🧪 Audio features result:', features);
+        
+        res.json({ success: true, features });
+    } catch (error) {
+        console.error('🚨 Audio features test error:', error);
+        res.status(500).json({ error: error.message, stack: error.stack });
+    }
 });
 
 // User info
