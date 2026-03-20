@@ -887,6 +887,35 @@ class AIdjPro {
         }
     }
 
+    // Test song request functionality
+    async testSongRequest() {
+        try {
+            console.log('🧪 Testing song request system...');
+            this.showNotification('🧪 Testing song request system...');
+            
+            const response = await fetch('/api/test-song-request', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ request: 'Levels' })
+            });
+            
+            console.log('🧪 Response status:', response.status);
+            const result = await response.json();
+            console.log('🧪 Test song request result:', result);
+            
+            if (response.ok) {
+                this.showNotification(`🧪 Song request test passed! Found ${result.searchCount} tracks`);
+            } else {
+                this.showNotification(`❌ Song request test failed: ${result.error}`, 'error');
+            }
+        } catch (error) {
+            console.error('🚨 Test song request failed:', error);
+            this.showNotification(`❌ Test failed: ${error.message}`, 'error');
+        }
+    }
+
     initWebAudio() {
         try {
             this.audioContext = new (window.AudioContext || window.webkitAudioContext)();

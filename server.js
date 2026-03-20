@@ -463,6 +463,40 @@ app.get('/api/spotify-status', async (req, res) => {
     }
 });
 
+// Test endpoint for song request debugging
+app.post('/api/test-song-request', async (req, res) => {
+    try {
+        console.log('🧪 Test song request endpoint hit');
+        const { request = 'Levels' } = req.body;
+        
+        console.log('🧪 Testing with request:', request);
+        
+        if (!spotify.token) {
+            return res.status(401).json({ error: 'No Spotify token' });
+        }
+        
+        // Test basic search first
+        const searchResults = await spotify.searchTracks(request, 5);
+        console.log('🧪 Search results:', searchResults.length, 'tracks found');
+        
+        // Test handleSongRequest
+        const result = await handleSongRequest(request);
+        console.log('🧪 Song request result:', result);
+        
+        res.json({ 
+            success: true, 
+            searchCount: searchResults.length,
+            result: result 
+        });
+    } catch (error) {
+        console.error('🚨 Test song request error:', error);
+        res.status(500).json({ 
+            error: error.message,
+            stack: error.stack?.split('\n').slice(0, 3)
+        });
+    }
+});
+
 // Test endpoint to verify tracking (dev only)
 app.post('/api/test-tracking', (req, res) => {
     const { type } = req.body;
@@ -629,8 +663,20 @@ wss.on('connection', (ws) => {
                     break;
                     
                 case 'request-song':
-                    // AI will process this and add to queue intelligently
-                    await handleSongRequest(data.request);
+                    try {
+                        // AI will process this and add to queue intelligently
+                        console.log('🎵 Processing song request via WebSocket:', data.request);
+                        if (!data.request) {
+                            throw new Error('No song request provided');
+                        }
+                        await handleSongRequest(data.request);
+                    } catch (error) {
+                        console.error('🚨 WebSocket request-song error:', error.message);
+                        ws.send(JSON.stringify({
+                            type: 'error',
+                            message: `Song request failed: ${error.message}`
+                        }));
+                    }
                     break;
                     
                 case 'refresh-spotify':
@@ -675,14 +721,14 @@ function broadcast(message) {
 
 // AI Song Request Handler
 async function handleSongRequest(request) {
-    console.log('Processing song request:', request);
-    
-    // Track Claude token usage for AI processing (estimated)
-    const tokenUsage = estimateTokenUsage(request);
-    usageStats.claudeTokens += tokenUsage;
-    console.log(`📊 Claude tokens tracked: +${tokenUsage}, Total: ${usageStats.claudeTokens}`);
+    console.log('🎵 Processing song request:', request);
     
     try {
+        // Track Claude token usage for AI processing (estimated)
+        const tokenUsage = estimateTokenUsage(request);
+        usageStats.claudeTokens += tokenUsage;
+        console.log(`📊 Claude tokens tracked: +${tokenUsage}, Total: ${usageStats.claudeTokens}`);
+        
         // Check if it's a natural language request vs specific song
         const isNaturalLanguage = /^(play something|give me|i want|mood|feel like|vibe)/i.test(request.trim());
         
@@ -738,11 +784,17 @@ async function handleSongRequest(request) {
         }
         
     } catch (error) {
-        console.error('Error handling song request:', error);
+        console.error('🚨 Error handling song request:', {
+            error: error.message,
+            stack: error.stack?.split('\n').slice(0, 3),
+            request: request,
+            spotifyToken: !!spotify.token
+        });
         broadcast({ 
             type: 'error', 
-            message: `Failed to process request: ${error.message}`
+            message: `Failed to process request: ${error.message}. Check server logs for details.`
         });
+        throw error; // Re-throw so the HTTP handler can return 500
     }
 }
 
