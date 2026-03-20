@@ -1032,13 +1032,20 @@ app.post('/api/search', async (req, res) => {
     }
 });
 
-// Add track to queue with analysis
+// Add track to queue with analysis - FIXED DUPLICATES
 app.post('/api/add-to-queue', async (req, res) => {
     try {
         const { track } = req.body;
         
         if (!track || !track.id) {
             return res.status(400).json({ error: 'Invalid track data' });
+        }
+        
+        // CHECK FOR DUPLICATES FIRST!
+        const alreadyInQueue = djState.queue.find(queueTrack => queueTrack.id === track.id);
+        if (alreadyInQueue) {
+            console.log(`⚠️ Track already in queue: ${track.name}`);
+            return res.status(409).json({ error: 'Track already in queue', duplicate: true });
         }
         
         console.log(`➕ Adding to queue: ${track.name} by ${track.artist}`);

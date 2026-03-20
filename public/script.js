@@ -278,7 +278,7 @@ class DJMEWv2 {
         // Playback controls
         document.getElementById('play-btn')?.addEventListener('click', () => this.play());
         document.getElementById('pause-btn')?.addEventListener('click', () => this.pause());
-        document.getElementById('next-btn')?.addEventListener('click', () => this.nextTrack());
+        document.getElementById('next-btn')?.addEventListener('click', () => this.playNextFromQueue());
         
         // Queue controls
         document.getElementById('optimize-queue-btn')?.addEventListener('click', () => this.optimizeQueue());
@@ -378,7 +378,7 @@ class DJMEWv2 {
         }
     }
 
-    // Queue Management - The Smart Part!
+    // Queue Management - FIXED DUPLICATES!
     async addToQueue(trackId) {
         try {
             const track = this.searchResults.find(t => t.id === trackId);
@@ -386,10 +386,10 @@ class DJMEWv2 {
                 throw new Error('Track not found');
             }
 
-            // Check if song is already in queue
+            // Double-check for duplicates on client side first
             const alreadyQueued = this.state.queue.find(queueTrack => queueTrack.id === trackId);
             if (alreadyQueued) {
-                this.showNotification(`⚠️ "${track.name}" is already in queue!`, 'error');
+                this.showNotification(`⚠️ "${track.name}" is already in queue!`, 'warning');
                 return;
             }
 
@@ -404,20 +404,31 @@ class DJMEWv2 {
             });
 
             if (!response.ok) {
-                throw new Error(`Failed to add to queue: ${response.status}`);
+                const errorData = await response.json();
+                if (response.status === 409 && errorData.duplicate) {
+                    // Handle duplicate gracefully
+                    this.showNotification(`⚠️ "${track.name}" is already in queue!`, 'warning');
+                    return;
+                }
+                throw new Error(errorData.error || `Failed to add to queue: ${response.status}`);
             }
 
             const result = await response.json();
             
-            // Update local queue state immediately
-            this.state.queue.push(result.item);
-            this.renderQueue();
-            
-            this.showNotification(`✅ Added "${track.name}" to queue (${result.item.bpm} BPM, ${result.item.key} key)`);
-            
-            // Clear search after adding
-            document.getElementById('song-search').value = '';
-            this.clearSearchResults();
+            // Update local queue state immediately (prevent duplicates again)
+            if (!this.state.queue.find(q => q.id === result.item.id)) {
+                this.state.queue.push(result.item);
+                this.renderQueue();
+                
+                this.showNotification(`✅ Added "${track.name}" to queue (${result.item.bpm} BPM, ${result.item.key} key)`);
+                
+                // Clear search after adding
+                document.getElementById('song-search').value = '';
+                this.clearSearchResults();
+            } else {
+                console.log('⚠️ Prevented duplicate on client side after server response');
+                this.showNotification(`⚠️ "${track.name}" is already in queue!`, 'warning');
+            }
             
             console.log('🎵 Current queue after adding:', this.state.queue.map(t => t.name));
             
@@ -1666,29 +1677,44 @@ class DJMEWv2 {
                     paused: state.paused,
                     position: state.position,
                     duration: state.duration,
-                    track: state.track_window.current_track?.name
+                    track: state.track_window.current_track?.name,
+                    shuffle: state.shuffle,
+                    repeat_mode: state.repeat_mode
                 });
                 
                 this.updatePlayerState(state);
                 
-                // CRITICAL: Detect when track ends and auto-play next
-                if (state.track_window.current_track && 
-                    state.paused && 
-                    state.position === 0 && 
-                    state.duration > 0) {
-                    
-                    console.log('🔚 Track ended, starting auto-play...');
-                    this.handleTrackEnded(state.track_window.current_track);
-                }
-                
-                // Prepare for smooth transitions (10 seconds before end)
-                if (!state.paused && 
-                    state.track_window.current_track && 
-                    state.duration > 0) {
-                    
+                // ENHANCED: Multiple ways to detect track ending
+                if (state.track_window.current_track) {
                     const timeRemaining = state.duration - state.position;
-                    if (timeRemaining < 10000 && timeRemaining > 8000 && !this.transitionPrepared) {
-                        console.log('🎛️ Preparing for transition...');
+                    
+                    // Method 1: Track ended (paused at position 0)
+                    if (state.paused && state.position === 0 && state.duration > 0) {
+                        console.log('🔚 Track ended (Method 1: paused at 0), starting auto-play...');
+                        this.handleTrackEnded(state.track_window.current_track);
+                        return;
+                    }
+                    
+                    // Method 2: Track very close to end (less than 2 seconds)
+                    if (!state.paused && timeRemaining < 2000 && timeRemaining > 0) {
+                        console.log('🔚 Track ending soon (Method 2: <2s remaining), preparing auto-play...');
+                        setTimeout(() => {
+                            this.handleTrackEnded(state.track_window.current_track);
+                        }, Math.max(0, timeRemaining - 500)); // Start 500ms before end
+                        return;
+                    }
+                    
+                    // Method 3: Track completed (position near duration)
+                    if (!state.paused && state.position > 0 && 
+                        Math.abs(state.position - state.duration) < 1000) {
+                        console.log('🔚 Track completed (Method 3: position near duration), starting auto-play...');
+                        this.handleTrackEnded(state.track_window.current_track);
+                        return;
+                    }
+                    
+                    // Prepare for smooth transitions (10 seconds before end)
+                    if (!state.paused && timeRemaining < 10000 && timeRemaining > 8000 && !this.transitionPrepared) {
+                        console.log('🎛️ Preparing for transition in 10 seconds...');
                         this.prepareNextTrack();
                         this.transitionPrepared = true;
                         
@@ -1781,34 +1807,64 @@ class DJMEWv2 {
         this.updatePlaybackControls();
     }
 
-    // Handle track ending - AUTO-PLAY NEXT TRACK!
+    // Handle track ending - AUTO-PLAY NEXT TRACK! (ENHANCED)
     async handleTrackEnded(endedTrack) {
-        console.log('🔚 Track ended:', endedTrack.name);
+        // Prevent multiple simultaneous calls
+        if (this.handlingTrackEnd) {
+            console.log('⚠️ Already handling track end, skipping...');
+            return;
+        }
+        this.handlingTrackEnd = true;
         
-        // Find current track position in queue
-        const currentIndex = this.state.queue.findIndex(track => track.id === endedTrack.id);
-        
-        if (currentIndex >= 0 && currentIndex < this.state.queue.length - 1) {
-            // There's a next track in queue
-            const nextTrack = this.state.queue[currentIndex + 1];
-            console.log('▶️ Auto-playing next track:', nextTrack.name);
+        try {
+            console.log('🔚 Track ended:', endedTrack.name, 'ID:', endedTrack.id);
             
-            // Update current track
-            this.state.currentTrack = nextTrack;
+            // Find current track position in queue
+            const currentIndex = this.state.queue.findIndex(track => track.id === endedTrack.id);
+            console.log('📍 Current track index in queue:', currentIndex, 'Queue length:', this.state.queue.length);
             
-            // Play with legendary transition (NO AUDIO BLOCKING)
-            await this.playNextTrackWithTransition(endedTrack, nextTrack);
-            
-        } else {
-            console.log('🏁 End of queue reached');
-            this.showNotification('🏁 Queue finished! Add more tracks or let MEW suggest some!');
-            
-            // Suggest more songs after queue ends
-            if (this.state.queue.length > 2) {
-                setTimeout(() => {
-                    this.showNotification('🤖 Want MEW to auto-add more songs for this vibe?');
-                }, 3000);
+            if (currentIndex >= 0 && currentIndex < this.state.queue.length - 1) {
+                // There's a next track in queue
+                const nextTrack = this.state.queue[currentIndex + 1];
+                console.log('▶️ Auto-playing next track:', nextTrack.name);
+                
+                // Update current track immediately
+                this.state.currentTrack = nextTrack;
+                this.updateNowPlaying();
+                
+                // Play with legendary transition (NO AUDIO BLOCKING)
+                await this.playNextTrackWithTransition(endedTrack, nextTrack);
+                
+            } else if (currentIndex >= 0) {
+                // End of queue reached
+                console.log('🏁 End of queue reached');
+                this.showNotification('🏁 Queue finished! Add more tracks or let MEW suggest some!');
+                
+                // Suggest more songs after queue ends
+                if (this.state.queue.length > 2) {
+                    setTimeout(() => {
+                        this.showNotification('🤖 Want MEW to auto-add more songs for this vibe?');
+                    }, 3000);
+                }
+            } else {
+                // Track not found in queue (might be manually started)
+                console.log('⚠️ Ended track not found in queue, checking for any next tracks...');
+                if (this.state.queue.length > 0) {
+                    const nextTrack = this.state.queue[0];
+                    console.log('▶️ Playing first track from queue:', nextTrack.name);
+                    this.state.currentTrack = nextTrack;
+                    await this.startTrackPlayback(nextTrack);
+                }
             }
+            
+        } catch (error) {
+            console.error('❌ Error handling track end:', error);
+            this.showNotification('Error auto-playing next track: ' + error.message, 'error');
+        } finally {
+            // Reset flag after 2 seconds to prevent issues
+            setTimeout(() => {
+                this.handlingTrackEnd = false;
+            }, 2000);
         }
     }
 
@@ -1824,44 +1880,61 @@ class DJMEWv2 {
         }
     }
 
-    // Play next track with legendary transition - FIXED: NO AUDIO BLOCKING!
+    // Play next track with legendary transition - ENHANCED & RELIABLE!
     async playNextTrackWithTransition(fromTrack, toTrack) {
         try {
             console.log('🎛️ Starting legendary DJ transition...');
             console.log(`🎵 From: ${fromTrack.name} → To: ${toTrack.name}`);
             
-            // Get current vibe for intelligent technique selection
-            const vibeResponse = await fetch('/api/queue-vibe');
-            const { vibe } = await vibeResponse.json();
-            
-            // MEW selects the perfect technique
-            const technique = this.selectIntelligentTransition(fromTrack, toTrack, vibe);
-            console.log(`🧠 MEW selected: ${technique.name}`);
-            
-            // Show MEW's creative decision
-            this.showNotification(`🔮 MEW: ${technique.description}`, 'dj-transition');
-            
-            // IMMEDIATELY start playing next track (NO DELAYS OR BLOCKING)
+            // IMMEDIATELY start playing next track FIRST (most important!)
+            console.log('🚀 Starting next track playback immediately...');
             await this.startTrackPlayback(toTrack);
             
-            // Do visual transition effects AFTER music starts (non-blocking)
-            this.performVisualTransition(technique, fromTrack, toTrack);
+            // Now get vibe for visual effects (after music is playing)
+            try {
+                const vibeResponse = await fetch('/api/queue-vibe');
+                if (vibeResponse.ok) {
+                    const { vibe } = await vibeResponse.json();
+                    
+                    // MEW selects the perfect technique
+                    const technique = this.selectIntelligentTransition(fromTrack, toTrack, vibe);
+                    console.log(`🧠 MEW selected: ${technique.name}`);
+                    
+                    // Show MEW's creative decision
+                    this.showNotification(`🔮 MEW: ${technique.description}`, 'dj-transition');
+                    
+                    // Do visual transition effects (non-blocking)
+                    this.performVisualTransition(technique, fromTrack, toTrack);
+                    
+                    // Show success message
+                    setTimeout(() => {
+                        this.showNotification(`✨ ${technique.success_message}`);
+                    }, 1500);
+                } else {
+                    console.log('⚠️ Vibe analysis failed, using basic visual transition');
+                    this.showNotification(`🎵 Playing: ${toTrack.name}`);
+                }
+            } catch (vibeError) {
+                console.error('Vibe analysis error (non-critical):', vibeError);
+                this.showNotification(`🎵 Playing: ${toTrack.name}`);
+            }
             
             // Track the transition for persistent stats
             this.trackTransition();
             
-            // Show success message
-            setTimeout(() => {
-                this.showNotification(`✨ ${technique.success_message}`);
-            }, 1500);
-            
-            console.log('✅ Legendary transition complete!');
+            console.log('✅ Auto-play transition complete!');
             
         } catch (error) {
-            console.error('❌ Transition failed, using direct playback:', error);
-            // Fallback: just play the next track
-            await this.startTrackPlayback(toTrack);
-            this.trackTransition();
+            console.error('❌ Auto-play failed:', error);
+            // Last resort fallback
+            try {
+                await this.startTrackPlayback(toTrack);
+                this.showNotification(`🎵 Playing: ${toTrack.name} (fallback)`);
+                this.trackTransition();
+            } catch (fallbackError) {
+                console.error('❌ Even fallback failed:', fallbackError);
+                this.showNotification('Failed to auto-play next track', 'error');
+            }
         }
     }
 
@@ -2239,6 +2312,60 @@ class DJMEWv2 {
                     <span class="mode-desc">${mode.description}</span>
                 </div>
             `;
+        }
+    }
+
+    // Manual play next from queue (for testing and backup)
+    async playNextFromQueue() {
+        try {
+            if (this.state.queue.length === 0) {
+                this.showNotification('Queue is empty! Add some songs first.', 'error');
+                return;
+            }
+
+            console.log('⏭️ Manually playing next from queue...');
+            
+            // If no current track, play first from queue
+            if (!this.state.currentTrack) {
+                const firstTrack = this.state.queue[0];
+                console.log('▶️ No current track, playing first from queue:', firstTrack.name);
+                this.state.currentTrack = firstTrack;
+                await this.startTrackPlayback(firstTrack);
+                this.updateNowPlaying();
+                this.showNotification(`🎵 Playing: ${firstTrack.name}`);
+                return;
+            }
+
+            // Find current track in queue and play next
+            const currentIndex = this.state.queue.findIndex(track => track.id === this.state.currentTrack.id);
+            
+            if (currentIndex >= 0 && currentIndex < this.state.queue.length - 1) {
+                const nextTrack = this.state.queue[currentIndex + 1];
+                console.log('⏭️ Playing next track:', nextTrack.name);
+                
+                const previousTrack = this.state.currentTrack;
+                this.state.currentTrack = nextTrack;
+                this.updateNowPlaying();
+                
+                // Play with transition
+                await this.playNextTrackWithTransition(previousTrack, nextTrack);
+                
+            } else if (currentIndex >= 0) {
+                // End of queue
+                this.showNotification('🏁 End of queue reached!');
+            } else {
+                // Current track not in queue, play first track
+                const firstTrack = this.state.queue[0];
+                console.log('🔄 Current track not in queue, playing first:', firstTrack.name);
+                this.state.currentTrack = firstTrack;
+                await this.startTrackPlayback(firstTrack);
+                this.updateNowPlaying();
+                this.showNotification(`🎵 Playing: ${firstTrack.name}`);
+            }
+            
+        } catch (error) {
+            console.error('❌ Error playing next from queue:', error);
+            this.showNotification('Failed to play next track: ' + error.message, 'error');
         }
     }
 
