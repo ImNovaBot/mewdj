@@ -1,0 +1,31 @@
+# MEW's Audio Effects Directory
+
+This directory is for audio effect samples (.mp3 or .wav files).
+
+If no real audio files are found, MEW will automatically generate fallback effects using Web Audio API.
+
+## How to Add Real Effects:
+
+1. Download free DJ samples from:
+   - Freesound.org (search "air horn", "scratch", "laser", etc.)
+   - Zapsplat.com (free with account)
+   - Your DJ software sample packs
+
+2. Name them exactly as expected:
+   - air_horn_triple.mp3
+   - scratch_baby.wav
+   - laser_sweep.wav
+   - rave_siren.mp3
+   - impact.wav
+   - crowd_cheer.mp3
+   - whoosh.wav
+   - rewind.mp3
+   - countdown.mp3
+
+3. Place them in this /effects/ directory
+
+4. Refresh the page and test with the audio controls
+
+## Current Status:
+MEW will use generated fallback effects until real samples are added.
+The system is fully functional with or without real audio files!

@@ -40,9 +40,24 @@ class DJMEWv2 {
         };
     }
 
-    // Initialize DJ Mixing Capabilities
+    // Initialize DJ Mixing Capabilities with Real Audio Effects
     async initDJMixing() {
         try {
+            console.log('🎛️ Initializing MEW\'s legendary DJ mixing system...');
+            
+            // Initialize MEW's audio effects manager
+            if (window.audioEffectsManager) {
+                this.updateAudioStatus('🔄 Loading MEW\'s legendary effects...');
+                await window.audioEffectsManager.initialize();
+                this.audioEffects = window.audioEffectsManager;
+                const effectCount = this.audioEffects.getAvailableEffects().length;
+                this.updateAudioStatus(`✅ ${effectCount} effects ready! MEW can mix!`);
+                console.log('✅ MEW\'s audio effects system ready!');
+            } else {
+                this.updateAudioStatus('❌ Audio effects not available');
+                console.warn('⚠️ Audio effects manager not available');
+            }
+            
             // Initialize Web Audio API for mixing
             this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
             
@@ -967,19 +982,25 @@ class DJMEWv2 {
         return { ...techniques.psychic_crossfade, key: 'psychic_crossfade' };
     }
 
-    // Execute the chosen transition technique with effects - FIXED: NON-BLOCKING!
+    // Execute the chosen transition technique with REAL AUDIO effects - ENHANCED!
     executeTransitionTechnique(technique, fromTrack, toTrack) {
-        console.log(`🎛️ Executing ${technique.name} (non-blocking)...`);
+        console.log(`🎛️ Executing ${technique.name} with REAL audio effects...`);
         
-        // Visual effects sequence (non-blocking)
+        // Calculate intelligent effect volumes based on track energy and genre
+        const baseVolume = this.calculateIntelligentEffectVolume(fromTrack, toTrack, technique);
+        
+        // Audio + Visual effects sequence (non-blocking)
         const effectDuration = technique.duration / technique.effects.length;
         
         technique.effects.forEach((effect, i) => {
-            setTimeout(() => {
-                console.log(`🎪 Applying ${effect} effect`);
+            setTimeout(async () => {
+                console.log(`🎪 Applying ${effect} effect with intelligent volume`);
                 
-                // Activate visual effect
-                this.activateTransitionEffect(effect);
+                // Calculate volume for this specific effect
+                const effectVolume = baseVolume * (1 + (i * 0.1)); // Slight increase per effect
+                
+                // Activate REAL audio + visual effect
+                await this.activateTransitionEffect(effect, effectVolume);
                 
                 // Show crossfader movement
                 this.animateCrossfader(i / technique.effects.length);
@@ -995,10 +1016,117 @@ class DJMEWv2 {
         return Promise.resolve();
     }
 
-    // Activate specific transition effect visually - LEGENDARY DJ EFFECTS!
-    activateTransitionEffect(effect) {
-        // Enhanced effect mapping for all DJ styles
-        const effectMap = {
+    // Calculate intelligent effect volume based on track characteristics
+    calculateIntelligentEffectVolume(fromTrack, toTrack, technique) {
+        let baseVolume = 0.6; // Default
+        
+        // Energy-based volume adjustment
+        const avgEnergy = ((fromTrack.energy || 50) + (toTrack.energy || 50)) / 2;
+        
+        if (avgEnergy > 80) {
+            baseVolume = 0.8; // High energy = louder effects
+        } else if (avgEnergy > 60) {
+            baseVolume = 0.7; // Medium-high energy
+        } else if (avgEnergy < 40) {
+            baseVolume = 0.4; // Low energy = quieter effects
+        }
+        
+        // Genre-based adjustments
+        const techniqueKey = technique.key || technique.name;
+        
+        if (techniqueKey.includes('khaled') || techniqueKey.includes('air_horn')) {
+            baseVolume = Math.min(0.9, baseVolume + 0.2); // Hip-hop air horns are LOUD
+        } else if (techniqueKey.includes('ambient') || techniqueKey.includes('smooth')) {
+            baseVolume = Math.max(0.3, baseVolume - 0.2); // Ambient effects are subtle
+        } else if (techniqueKey.includes('rave') || techniqueKey.includes('electronic')) {
+            baseVolume = Math.min(0.8, baseVolume + 0.1); // Electronic effects cut through
+        }
+        
+        // BPM-based adjustments
+        const avgBPM = ((fromTrack.bpm || 120) + (toTrack.bpm || 120)) / 2;
+        
+        if (avgBPM > 140) {
+            baseVolume += 0.1; // Fast tracks = slightly louder effects
+        } else if (avgBPM < 90) {
+            baseVolume -= 0.1; // Slow tracks = quieter effects
+        }
+        
+        // Clamp volume to reasonable range
+        baseVolume = Math.max(0.2, Math.min(0.9, baseVolume));
+        
+        console.log(`🧠 MEW calculated intelligent effect volume: ${(baseVolume * 100).toFixed(0)}% (energy: ${avgEnergy}%, technique: ${techniqueKey})`);
+        
+        return baseVolume;
+    }
+
+    // Update audio status indicator
+    updateAudioStatus(message) {
+        const statusEl = document.getElementById('audio-status');
+        if (statusEl) {
+            statusEl.textContent = message;
+        }
+    }
+
+    // Activate REAL transition effect with audio - LEGENDARY DJ EFFECTS!
+    async activateTransitionEffect(effect, volume = null) {
+        console.log(`🔊 MEW activating REAL effect: ${effect}`);
+        
+        // Map effects to actual audio samples
+        const audioEffectMap = {
+            // Hip-Hop & Rap Effects  
+            'triple_air_horn': 'air_horn_triple',
+            'dj_khaled_vocal': 'air_horn_triple', // Fallback to air horn
+            'turntable_scratch': 'scratch_baby',
+            'vinyl_cut': 'scratch_baby',
+            'scratch_blend': 'scratch_baby',
+            'rewind_sound': 'rewind',
+            'explosive_drop': 'impact',
+            
+            // Trap & Modern Effects
+            'trap_buildup': 'impact',
+            'bass_drop_impact': 'impact',
+            'metro_boomin_tag': 'impact',
+            'dj_mustard_tag': 'impact',
+            
+            // Reggaeton & Latin Effects
+            'latin_air_horn': 'air_horn_triple',
+            'crowd_chant': 'crowd_cheer',
+            'perreo_buildup': 'impact',
+            'spanish_vocal_shout': 'air_horn_triple',
+            'party_whistle': 'whoosh',
+            'latin_buildup': 'impact',
+            
+            // Electronic & Rave Effects
+            'laser_sweep': 'laser_sweep',
+            'electronic_drop': 'impact',
+            'rave_siren': 'rave_siren',
+            'euphoric_drop': 'impact',
+            'whoosh': 'whoosh',
+            
+            // Pop & Mainstream Effects
+            'pop_drop': 'impact',
+            
+            // Smooth & R&B Effects
+            'smooth_vocal': 'whoosh',
+            'silk_transition': 'whoosh',
+            
+            // Crowd Interaction Effects
+            'crowd_cheer': 'crowd_cheer',
+            'applause': 'crowd_cheer',
+            'countdown_vocal': 'countdown',
+            'crowd_anticipation': 'crowd_cheer',
+            'massive_drop': 'impact',
+            'anthem_rise': 'impact',
+            
+            // Universal Effects
+            'ambient_wash': 'whoosh',
+            'tempo_shift': 'impact',
+            'psychic_energy': 'laser_sweep',
+            'crossfade_magic': 'whoosh',
+            'mew_signature': 'laser_sweep'
+        };
+        
+        const visualEffectMap = {
             // Hip-Hop & Rap Effects
             'triple_air_horn': 'effect-filter',
             'dj_khaled_vocal': 'effect-echo', 
@@ -1053,7 +1181,26 @@ class DJMEWv2 {
             'mew_signature': 'effect-filter'
         };
         
-        const elementId = effectMap[effect] || 'effect-filter';
+        // PLAY REAL AUDIO EFFECT!
+        const audioEffectName = audioEffectMap[effect];
+        if (audioEffectName && this.audioEffects) {
+            try {
+                // MEW intelligently ducks music volume for effect
+                this.audioEffects.duckMusic(0.4, 2000); // Duck music 40% for 2 seconds
+                
+                // Play the actual audio effect
+                await this.audioEffects.playEffect(audioEffectName, volume);
+                console.log(`🔊 MEW played REAL effect: ${audioEffectName} for ${effect}`);
+                
+            } catch (audioError) {
+                console.warn(`⚠️ Audio effect failed: ${audioEffectName}`, audioError);
+            }
+        } else {
+            console.log(`🔇 No audio mapping for effect: ${effect}, using visual only`);
+        }
+        
+        // VISUAL EFFECT (complementary to audio)
+        const elementId = visualEffectMap[effect] || 'effect-filter';
         const effectEl = document.getElementById(elementId);
         
         if (effectEl) {
@@ -2312,6 +2459,67 @@ class DJMEWv2 {
                     <span class="mode-desc">${mode.description}</span>
                 </div>
             `;
+        }
+    }
+
+    // MEW's audio control functions
+    setMusicVolume(value) {
+        const volume = value / 100;
+        if (this.audioEffects) {
+            this.audioEffects.setMusicVolume(volume);
+        }
+        
+        const valueEl = document.getElementById('music-volume-value');
+        if (valueEl) {
+            valueEl.textContent = `${value}%`;
+        }
+        
+        console.log(`🎵 Music volume set to ${value}%`);
+    }
+
+    setEffectsVolume(value) {
+        const volume = value / 100;
+        if (this.audioEffects) {
+            this.audioEffects.setEffectsVolume(volume);
+        }
+        
+        const valueEl = document.getElementById('effects-volume-value');
+        if (valueEl) {
+            valueEl.textContent = `${value}%`;
+        }
+        
+        console.log(`🔊 Effects volume set to ${value}%`);
+    }
+
+    async testEffect(effectName) {
+        if (!this.audioEffects) {
+            this.showNotification('Audio effects not initialized!', 'error');
+            return;
+        }
+        
+        try {
+            console.log(`🧪 Testing effect: ${effectName}`);
+            await this.audioEffects.playEffect(effectName);
+            this.showNotification(`🔊 Tested effect: ${effectName}`);
+        } catch (error) {
+            console.error('Effect test error:', error);
+            this.showNotification('Failed to play effect: ' + error.message, 'error');
+        }
+    }
+
+    async testAllEffects() {
+        if (!this.audioEffects) {
+            this.showNotification('Audio effects not initialized!', 'error');
+            return;
+        }
+        
+        this.showNotification('🧪 Testing all MEW effects...');
+        try {
+            await this.audioEffects.testAllEffects();
+            this.showNotification('✅ All effects tested successfully!');
+        } catch (error) {
+            console.error('Effect testing error:', error);
+            this.showNotification('Failed to test effects: ' + error.message, 'error');
         }
     }
 

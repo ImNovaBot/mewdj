@@ -88,6 +88,35 @@
 
             <!-- DJ Crossfader & Effects -->
             <div class="dj-mixer-section">
+                <!-- MEW's Audio Controls -->
+                <div class="mew-audio-controls">
+                    <h4>🔊 MEW's Audio Control</h4>
+                    <div class="audio-status">
+                        <span id="audio-status">🔄 Initializing audio effects...</span>
+                    </div>
+                    <div class="volume-controls">
+                        <div class="volume-control">
+                            <label>🎵 Music Volume</label>
+                            <input type="range" id="music-volume" min="0" max="100" value="90" onchange="aidj.setMusicVolume(this.value)">
+                            <span id="music-volume-value">90%</span>
+                        </div>
+                        <div class="volume-control">
+                            <label>🔊 Effects Volume</label>
+                            <input type="range" id="effects-volume" min="0" max="100" value="80" onchange="aidj.setEffectsVolume(this.value)">
+                            <span id="effects-volume-value">80%</span>
+                        </div>
+                    </div>
+                    <div class="effect-test-buttons">
+                        <button onclick="aidj.testEffect('air_horn_triple')" class="test-btn">📯 Air Horn</button>
+                        <button onclick="aidj.testEffect('scratch_baby')" class="test-btn">🎛️ Scratch</button>
+                        <button onclick="aidj.testEffect('laser_sweep')" class="test-btn">🌟 Laser</button>
+                        <button onclick="aidj.testEffect('impact')" class="test-btn">💥 Impact</button>
+                        <button onclick="aidj.testEffect('rave_siren')" class="test-btn">🚨 Siren</button>
+                        <button onclick="aidj.testEffect('crowd_cheer')" class="test-btn">👥 Crowd</button>
+                        <button onclick="aidj.testAllEffects()" class="test-all-btn">🧪 Test All</button>
+                    </div>
+                </div>
+                
                 <div class="crossfader-container">
                     <label>🔮 MEW's Psychic Crossfader</label>
                     <div class="crossfader-track">
@@ -130,6 +159,7 @@
                         <button onclick="aidj.mewSuggestSongs()" class="mew-btn">🔮 MEW Suggests</button>
                         <button onclick="aidj.mewAutoAdd()" class="auto-btn">🤖 Auto-Add</button>
                         <button onclick="aidj.showPartyModes()" class="party-mode-btn">🎛️ DJ Style</button>
+                        <button onclick="aidj.debugQueue()" class="debug-btn">🐛 Debug</button>
                         <button id="clear-queue-btn" class="clear-btn">🗑️ Clear</button>
                     </div>
                 </div>
@@ -197,6 +227,7 @@
     </div>
 
     <script src="https://sdk.scdn.co/spotify-player.js"></script>
+    <script src="audio-effects-manager.js"></script>
     <script src="script.js"></script>
 </body>
 </html>

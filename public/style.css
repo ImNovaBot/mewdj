@@ -1913,6 +1913,23 @@ body {
     box-shadow: 0 5px 20px rgba(245, 158, 11, 0.4);
 }
 
+.debug-btn {
+    background: linear-gradient(45deg, #64748b, #475569);
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 0.9rem;
+}
+
+.debug-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(100, 116, 139, 0.4);
+}
+
 /* Vibe Analysis Display */
 .vibe-analysis {
     background: linear-gradient(145deg, rgba(168, 85, 247, 0.2), rgba(139, 92, 246, 0.3));
@@ -2415,6 +2432,140 @@ body {
     color: #a1a1aa;
     padding: 20px;
     font-style: italic;
+}
+
+/* MEW's Audio Controls */
+.mew-audio-controls {
+    background: linear-gradient(145deg, rgba(0, 0, 0, 0.6), rgba(26, 13, 38, 0.6));
+    border: 1px solid rgba(168, 85, 247, 0.3);
+    border-radius: 15px;
+    padding: 20px;
+    margin-bottom: 20px;
+    animation: psychic-glow 4s ease-in-out infinite alternate;
+}
+
+.mew-audio-controls h4 {
+    color: #a855f7;
+    margin-bottom: 10px;
+    text-align: center;
+}
+
+.audio-status {
+    text-align: center;
+    margin-bottom: 15px;
+}
+
+.audio-status span {
+    color: #fbbf24;
+    font-size: 0.9rem;
+    font-weight: bold;
+}
+
+.volume-controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+.volume-control {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.volume-control label {
+    color: #c084fc;
+    font-weight: bold;
+    font-size: 0.9rem;
+}
+
+.volume-control input[type="range"] {
+    appearance: none;
+    width: 100%;
+    height: 6px;
+    background: linear-gradient(90deg, rgba(168, 85, 247, 0.3), rgba(168, 85, 247, 0.7));
+    border-radius: 3px;
+    outline: none;
+    cursor: pointer;
+}
+
+.volume-control input[type="range"]::-webkit-slider-thumb {
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    background: linear-gradient(45deg, #8b5cf6, #a855f7);
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(168, 85, 247, 0.4);
+}
+
+.volume-control input[type="range"]::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    background: linear-gradient(45deg, #8b5cf6, #a855f7);
+    border-radius: 50%;
+    cursor: pointer;
+    border: none;
+    box-shadow: 0 2px 8px rgba(168, 85, 247, 0.4);
+}
+
+.volume-control span {
+    color: #fbbf24;
+    font-weight: bold;
+    text-align: center;
+    font-size: 0.9rem;
+}
+
+.effect-test-buttons {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 10px;
+}
+
+.test-btn {
+    background: linear-gradient(45deg, #059669, #10b981);
+    color: white;
+    border: none;
+    padding: 8px 12px;
+    border-radius: 12px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 0.8rem;
+}
+
+.test-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(5, 150, 105, 0.4);
+}
+
+.test-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 8px rgba(5, 150, 105, 0.3);
+}
+
+.test-all-btn {
+    background: linear-gradient(45deg, #8b5cf6, #a855f7);
+    color: white;
+    border: none;
+    padding: 10px 16px;
+    border-radius: 12px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 0.9rem;
+    grid-column: 1 / -1; /* Span full width */
+}
+
+.test-all-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(168, 85, 247, 0.4);
+}
+
+.test-all-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 4px 12px rgba(168, 85, 247, 0.3);
 }
 
 /* Enhanced Psychic Glow Animation */
