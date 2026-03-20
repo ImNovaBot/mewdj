@@ -223,7 +223,8 @@ class DJMEWv2 {
                 break;
                 
             case 'queue-update':
-                this.state.queue = message.queue;
+                console.log('📨 Queue update received:', message.queue.length, 'tracks');
+                this.state.queue = message.queue || [];
                 this.renderQueue();
                 break;
                 
@@ -376,7 +377,14 @@ class DJMEWv2 {
                 throw new Error('Track not found');
             }
 
-            console.log('➕ Adding to queue:', track.name);
+            // Check if song is already in queue
+            const alreadyQueued = this.state.queue.find(queueTrack => queueTrack.id === trackId);
+            if (alreadyQueued) {
+                this.showNotification(`⚠️ "${track.name}" is already in queue!`, 'error');
+                return;
+            }
+
+            console.log('➕ Adding to queue:', track.name, 'ID:', trackId);
             
             const response = await fetch('/api/add-to-queue', {
                 method: 'POST',
@@ -392,11 +400,17 @@ class DJMEWv2 {
 
             const result = await response.json();
             
+            // Update local queue state immediately
+            this.state.queue.push(result.item);
+            this.renderQueue();
+            
             this.showNotification(`✅ Added "${track.name}" to queue (${result.item.bpm} BPM, ${result.item.key} key)`);
             
             // Clear search after adding
             document.getElementById('song-search').value = '';
             this.clearSearchResults();
+            
+            console.log('🎵 Current queue after adding:', this.state.queue.map(t => t.name));
             
         } catch (error) {
             console.error('Add to queue error:', error);
@@ -553,16 +567,23 @@ class DJMEWv2 {
     }
 
     removeFromQueue(index) {
+        console.log('🗑️ Removing track at index:', index);
+        const removedTrack = this.state.queue[index];
         this.state.queue.splice(index, 1);
         this.renderQueue();
         
-        // Send update to server
-        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-            this.ws.send(JSON.stringify({
-                type: 'queue-update',
-                queue: this.state.queue
-            }));
-        }
+        this.showNotification(`🗑️ Removed "${removedTrack?.name}" from queue`);
+        
+        // Send update to server via API
+        fetch('/api/update-queue', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ queue: this.state.queue })
+        }).catch(error => {
+            console.error('Failed to update server queue:', error);
+        });
     }
 
     updateQueueStats() {
@@ -669,6 +690,17 @@ class DJMEWv2 {
             this.state.currentTrack = nextTrack;
             this.renderQueue(); // Update queue display
             this.updateNowPlaying();
+            
+            // Sync queue state with server (track was removed by shift())
+            await fetch('/api/update-queue', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ queue: this.state.queue })
+            }).catch(error => {
+                console.error('Failed to sync queue with server:', error);
+            });
             
             // Schedule next transition if more tracks in queue
             if (this.state.queue.length > 0) {
@@ -1084,6 +1116,25 @@ class DJMEWv2 {
         this.updateNowPlaying();  
         this.updatePlaybackControls();
         this.updateStatsDisplay();
+    }
+
+    // Debug function to check queue state
+    debugQueue() {
+        console.log('🐛 DEBUG QUEUE STATE:');
+        console.log('📱 Client queue:', this.state.queue.map(t => ({ name: t.name, id: t.id })));
+        console.log('🎵 Current track:', this.state.currentTrack ? this.state.currentTrack.name : 'None');
+        console.log('🔍 Search results:', this.searchResults.map(t => ({ name: t.name, id: t.id })));
+        
+        // Also fetch server state
+        fetch('/api/state')
+            .then(r => r.json())
+            .then(state => {
+                console.log('🖥️ Server queue:', state.queue?.map(t => ({ name: t.name, id: t.id })) || []);
+                console.log('🖥️ Server current:', state.currentTrack ? state.currentTrack.name : 'None');
+            })
+            .catch(e => console.error('Failed to fetch server state:', e));
+        
+        this.showNotification('🐛 Queue debug info logged to console');
     }
 }
 

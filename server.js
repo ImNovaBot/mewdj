@@ -470,8 +470,27 @@ app.post('/api/optimize-queue', async (req, res) => {
     }
 });
 
+// Update queue (sync client changes)
+app.post('/api/update-queue', (req, res) => {
+    try {
+        const { queue } = req.body;
+        console.log('🔄 Syncing queue from client:', queue?.length || 0, 'tracks');
+        
+        djState.queue = queue || [];
+        
+        // Broadcast to other clients
+        broadcast({ type: 'queue-update', queue: djState.queue });
+        
+        res.json({ success: true, queueLength: djState.queue.length });
+    } catch (error) {
+        console.error('Update queue error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Clear queue
 app.post('/api/clear-queue', (req, res) => {
+    console.log('🗑️ Clearing entire queue');
     djState.queue = [];
     broadcast({ type: 'queue-update', queue: djState.queue });
     res.json({ success: true });
