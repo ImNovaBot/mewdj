@@ -1923,10 +1923,10 @@ class DJMEWv2 {
             // Show vibe analysis
             this.showVibeAnalysis(result.vibe);
             
-            // Show suggestions in a special popup
-            this.showMEWSuggestions(result.suggestions, result.vibe);
+            // Show personalized suggestions in a special popup
+            this.showMEWSuggestions(result.suggestions, result.vibe, result.queue_artists);
             
-            this.showNotification(`🔮 ${result.message} - Found ${result.suggestions.length} perfect matches!`);
+            this.showNotification(`🔮 ${result.message} - Found ${result.suggestions.length} personalized matches!`);
             
         } catch (error) {
             console.error('MEW suggestion error:', error);
@@ -1952,9 +1952,17 @@ class DJMEWv2 {
             }
 
             const result = await response.json();
-            console.log('🤖 MEW autonomously added:', result.added, 'tracks');
+            console.log('🤖 MEW autonomously added:', result.added, 'personalized tracks');
+            console.log('🎵 Added tracks:', result.tracks_added);
 
+            // Show detailed notification about what was added
+            const trackList = result.tracks_added.map(t => `${t.name} by ${t.artist} (${t.score}%)`).join(', ');
             this.showNotification(`🤖 ${result.message}`);
+            
+            // Show a follow-up notification with details
+            setTimeout(() => {
+                this.showNotification(`🎵 Added: ${trackList}`);
+            }, 2000);
             
             // Refresh queue display to show new tracks
             this.renderQueue();
@@ -2014,15 +2022,26 @@ class DJMEWv2 {
         }
     }
 
-    // Show MEW's song suggestions in a popup
-    showMEWSuggestions(suggestions, vibe) {
+    // Show MEW's personalized song suggestions in a popup
+    showMEWSuggestions(suggestions, vibe, queueArtists = []) {
         // Create suggestions modal
         const modal = document.createElement('div');
         modal.className = 'mew-suggestions-modal';
         modal.innerHTML = `
             <div class="mew-suggestions-content">
-                <h3>🔮 MEW's Perfect Song Suggestions</h3>
-                <p class="vibe-description">For your ${vibe.mood} ${vibe.primary_genre} vibe</p>
+                <h3>🔮 MEW's Personalized Song Suggestions</h3>
+                <p class="vibe-description">Based on your ${vibe.mood} ${vibe.primary_genre} taste</p>
+                
+                ${queueArtists.length > 0 ? `
+                    <div class="analyzed-artists">
+                        <h4>🧠 MEW analyzed your taste:</h4>
+                        <div class="artist-tags">
+                            ${queueArtists.slice(0, 4).map(artist => `
+                                <span class="artist-tag">${artist}</span>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : ''}
                 
                 <div class="suggestions-list">
                     ${suggestions.map((track, index) => `
@@ -2031,7 +2050,10 @@ class DJMEWv2 {
                             <div class="suggestion-info">
                                 <h4>${track.name}</h4>
                                 <p>${track.artist}</p>
-                                <div class="suggestion-score">${track.score || 75}% vibe match</div>
+                                <div class="suggestion-details">
+                                    <div class="suggestion-score">${track.score || 75}% match</div>
+                                    ${track.search_reason ? `<div class="suggestion-reason">${track.search_reason}</div>` : ''}
+                                </div>
                             </div>
                             <button class="add-suggestion-btn" onclick="aidj.addMEWSuggestion('${track.id}', ${index})">
                                 ➕ Add

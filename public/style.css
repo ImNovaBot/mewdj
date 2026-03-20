@@ -2089,6 +2089,53 @@ body {
     box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
 }
 
+/* Personalized Suggestions Enhancements */
+.analyzed-artists {
+    background: rgba(168, 85, 247, 0.15);
+    padding: 15px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+    border: 1px solid rgba(168, 85, 247, 0.3);
+}
+
+.analyzed-artists h4 {
+    color: #a855f7;
+    margin: 0 0 10px 0;
+    font-size: 0.9rem;
+}
+
+.artist-tags {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.artist-tag {
+    background: linear-gradient(45deg, #8b5cf6, #a855f7);
+    color: white;
+    padding: 4px 12px;
+    border-radius: 15px;
+    font-size: 0.8rem;
+    font-weight: bold;
+    animation: psychic-glow 3s ease-in-out infinite alternate;
+}
+
+.suggestion-details {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.suggestion-reason {
+    background: rgba(34, 197, 94, 0.2);
+    color: #10b981;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.7rem;
+    font-weight: bold;
+    border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
 /* Party Mode Selector Modal */
 .party-mode-content {
     background: linear-gradient(145deg, rgba(0, 0, 0, 0.95), rgba(26, 13, 38, 0.95));

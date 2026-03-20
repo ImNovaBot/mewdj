@@ -1339,18 +1339,24 @@ app.get('/api/dj-analysis/:trackId', async (req, res) => {
     }
 });
 
-// MEW reads the vibe and suggests songs
+// MEW reads the vibe and suggests personalized songs
 app.post('/api/mew-suggest-songs', async (req, res) => {
     try {
-        console.log('🔮 MEW is analyzing your vibe and finding perfect songs...');
+        console.log('🔮 MEW is analyzing your specific taste and finding personalized songs...');
         
         const currentQueue = djState.queue || [];
         const { count = 3 } = req.body;
         
-        // Let MEW analyze and suggest
+        if (currentQueue.length === 0) {
+            return res.status(400).json({ 
+                error: 'Add some songs to your queue first so MEW can analyze your taste!' 
+            });
+        }
+        
+        // Let MEW analyze and suggest with personalized intelligence
         const suggestions = await AutonomousDJ.autoFillQueue(currentQueue, spotify);
         
-        console.log(`✨ MEW found ${suggestions.suggestions.length} songs for ${suggestions.vibe.mood} vibe`);
+        console.log(`✨ MEW found ${suggestions.suggestions.length} personalized songs for your ${suggestions.vibe.mood} taste`);
         
         // Track MEW suggestion usage
         incrementStat('mewSuggestions');
@@ -1360,25 +1366,36 @@ app.post('/api/mew-suggest-songs', async (req, res) => {
             vibe: suggestions.vibe,
             suggestions: suggestions.suggestions,
             reasoning: suggestions.reasoning,
-            message: `🔮 MEW detected ${suggestions.vibe.mood} ${suggestions.vibe.primary_genre} vibe`
+            message: `🔮 MEW analyzed your taste: ${suggestions.vibe.mood} ${suggestions.vibe.primary_genre} vibe`,
+            personalized: true,
+            queue_artists: currentQueue.map(t => t.artist).filter(a => a).slice(0, 5)
         });
         
     } catch (error) {
-        console.error('🚨 MEW suggestion error:', error);
+        console.error('🚨 MEW personalized suggestion error:', error);
         res.status(500).json({ error: error.message });
     }
 });
 
-// MEW automatically adds suggested songs to queue
+// MEW automatically adds personalized songs to queue
 app.post('/api/mew-auto-add', async (req, res) => {
     try {
-        console.log('🤖 MEW is autonomously building your set...');
+        console.log('🤖 MEW is autonomously building your personalized set...');
         
         const currentQueue = djState.queue || [];
+        
+        if (currentQueue.length === 0) {
+            return res.status(400).json({ 
+                error: 'Add some songs to your queue first so MEW can learn your taste!' 
+            });
+        }
+        
         const suggestions = await AutonomousDJ.autoFillQueue(currentQueue, spotify);
         
-        // Add MEW's suggestions to queue with analysis
-        for (const track of suggestions.suggestions.slice(0, 2)) { // Add top 2
+        console.log(`🧠 MEW's personalized suggestions:`, suggestions.suggestions.map(t => `${t.name} by ${t.artist} (${t.score}%)`));
+        
+        // Add MEW's PERSONALIZED suggestions to queue with full analysis
+        for (const track of suggestions.suggestions.slice(0, 2)) { // Add top 2 personalized picks
             try {
                 const analysis = await spotify.getAudioFeatures(track.id);
                 const detailedAnalysis = await spotify.getDetailedAudioAnalysis(track.id);
@@ -1398,12 +1415,14 @@ app.post('/api/mew-auto-add', async (req, res) => {
                     play_duration: structure.recommendations.play_duration,
                     hot_cues: structure.recommendations.hot_cues,
                     added_by: 'mew',
-                    vibe_match_score: track.score || 75
+                    vibe_match_score: track.score || 75,
+                    search_reason: track.search_reason,
+                    personalized: true
                 };
                 
                 djState.queue.push(queueItem);
                 incrementStat('autonomousSongsAdded');
-                console.log(`✨ MEW added: ${track.name} (${track.score || 75}% vibe match)`);
+                console.log(`✨ MEW added: ${track.name} by ${track.artist} (${track.score}% match - ${track.search_reason})`);
             } catch (error) {
                 console.error(`Failed to add ${track.name}:`, error);
             }
@@ -1412,16 +1431,23 @@ app.post('/api/mew-auto-add', async (req, res) => {
         // Broadcast queue update
         broadcast({ type: 'queue-update', queue: djState.queue });
         
+        const addedTracks = suggestions.suggestions.slice(0, 2);
         res.json({
             success: true,
-            added: suggestions.suggestions.slice(0, 2).length,
+            added: addedTracks.length,
             vibe: suggestions.vibe,
             reasoning: suggestions.reasoning,
-            message: `🤖 MEW autonomously added ${suggestions.suggestions.slice(0, 2).length} perfect tracks!`
+            tracks_added: addedTracks.map(t => ({
+                name: t.name,
+                artist: t.artist,
+                score: t.score,
+                reason: t.search_reason
+            })),
+            message: `🤖 MEW added ${addedTracks.length} tracks perfectly matched to your taste!`
         });
         
     } catch (error) {
-        console.error('🚨 MEW auto-add error:', error);
+        console.error('🚨 MEW personalized auto-add error:', error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -1590,261 +1616,433 @@ app.get('/api/spotify-token', (req, res) => {
 
 // MEW's Autonomous DJ System - Finds Perfect Songs
 class AutonomousDJ {
-    static async findSongsForVibe(vibe, spotify, count = 3) {
-        console.log(`🔮 MEW is hunting for ${count} songs to match your ${vibe.mood} ${vibe.primary_genre} vibe...`);
+    static async findSongsForVibe(vibe, spotify, count = 3, currentQueue = []) {
+        console.log(`🔮 MEW is analyzing your specific taste for ${count} personalized song recommendations...`);
         
-        const searchQueries = this.generateSmartSearchQueries(vibe);
+        // Enhanced search with personalized analysis
+        const searchQueries = this.generateSmartSearchQueries(vibe, currentQueue);
         const foundTracks = [];
         
-        for (const query of searchQueries.slice(0, 3)) { // Try up to 3 different searches
+        console.log(`🧠 MEW generated ${searchQueries.length} personalized search strategies`);
+        
+        for (const query of searchQueries.slice(0, 6)) { // Try more searches for better results
             try {
-                console.log(`🎯 MEW searching: "${query.query}"`);
-                const results = await spotify.searchTracks(query.query, 10);
+                console.log(`🎯 MEW searching: "${query.query}" (${query.reason})`);
+                const results = await spotify.searchTracks(query.query, 8);
                 
-                // Filter and score results based on vibe compatibility
+                // Enhanced scoring with personalized factors
                 const scoredTracks = results
                     .map(track => ({
                         ...track,
-                        score: this.scoreTrackForVibe(track, vibe)
+                        score: this.scoreTrackForVibe(track, vibe, currentQueue),
+                        search_reason: query.reason,
+                        search_type: query.type || 'general',
+                        confidence: query.confidence || 70
                     }))
-                    .filter(track => track.score > 60) // Only good matches
+                    .filter(track => track.score > 65) // Higher threshold for quality
                     .sort((a, b) => b.score - a.score); // Best first
                 
                 // Add top tracks from this search
                 foundTracks.push(...scoredTracks.slice(0, 2));
                 
-                if (foundTracks.length >= count) break;
+                if (foundTracks.length >= count + 2) break; // Get a few extra for filtering
             } catch (error) {
                 console.error('Search error:', error);
             }
         }
         
-        // Remove duplicates and return best matches
+        // Remove duplicates and tracks already in queue
+        const queueIds = currentQueue.map(track => track.id);
         const uniqueTracks = foundTracks.filter((track, index, self) =>
-            index === self.findIndex(t => t.id === track.id)
+            index === self.findIndex(t => t.id === track.id) && // No duplicates
+            !queueIds.includes(track.id) // Not already in queue
         ).slice(0, count);
         
-        console.log(`✨ MEW found ${uniqueTracks.length} perfect tracks for the vibe!`);
+        // Sort by personalized score and search confidence
+        uniqueTracks.sort((a, b) => {
+            const scoreA = a.score + (a.confidence || 0) / 10;
+            const scoreB = b.score + (b.confidence || 0) / 10;
+            return scoreB - scoreA;
+        });
+        
+        console.log(`✨ MEW found ${uniqueTracks.length} personalized tracks based on your specific taste!`);
+        uniqueTracks.forEach(track => {
+            console.log(`  🎵 ${track.name} by ${track.artist} (${track.score}% match, ${track.search_reason})`);
+        });
+        
         return uniqueTracks;
     }
 
-    static generateSmartSearchQueries(vibe) {
+    static generateSmartSearchQueries(vibe, currentQueue = []) {
         const queries = [];
         
-        // Expanded base genre queries for LEGENDARY party vibes
-        const genreQueries = {
-            'high-energy-dance': [
-                'festival EDM bangers',
-                'club dance anthems',
-                'electronic party hits',
-                'rave festival music'
-            ],
-            'electronic': [
-                'house music bangers',
-                'techno club hits',
-                'electronic dance hits',
-                'synth pop party'
-            ],
-            'hip-hop': [
-                'hip hop party bangers',
-                'rap club hits',
-                'hip hop dance tracks',
-                'party rap anthems'
-            ],
-            'rap': [
-                'rap bangers',
-                'hardcore rap hits',
-                'gangsta rap classics',
-                'rap party songs'
-            ],
-            'trap': [
-                'trap bangers',
-                'hard trap beats',
-                'southern hip hop',
-                'trap party music'
-            ],
-            'reggaeton': [
-                'reggaeton hits',
-                'latin party music',
-                'perreo classics',
-                'reggaeton club bangers'
-            ],
-            'latin': [
-                'latin party hits',
-                'salsa dance music',
-                'bachata party',
-                'latin dance tracks'
-            ],
-            'pop': [
-                'pop party hits',
-                'mainstream dance',
-                'top 40 bangers',
-                'radio party hits'
-            ],
-            'r&b': [
-                'r&b party songs',
-                'neo soul hits',
-                'smooth r&b',
-                'r&b club tracks'
-            ],
-            'feel-good': [
-                'feel good party',
-                'uplifting dance hits',
-                'positive energy music',
-                'good vibes party'
-            ],
-            'chill': [
-                'chill party vibes',
-                'laid back hip hop',
-                'smooth party music',
-                'relaxed club music'
-            ]
-        };
-
-        // Energy-specific modifiers
-        const energyModifiers = {
-            'building': ['high energy', 'intense', 'powerful', 'energetic'],
-            'cooling': ['mellow', 'calm', 'relaxed', 'smooth'],
-            'neutral': ['steady', 'consistent', 'flowing']
-        };
-
-        // BPM-specific additions
-        let bpmRange = '';
-        if (vibe.average_bpm > 130) bpmRange = 'fast tempo';
-        else if (vibe.average_bpm < 100) bpmRange = 'slow tempo';
-        else bpmRange = 'medium tempo';
-
-        // Generate combination queries
-        const baseQueries = genreQueries[vibe.primary_genre] || genreQueries['electronic'];
-        const energyMods = energyModifiers[vibe.energy_trend] || energyModifiers['neutral'];
-
-        baseQueries.forEach((base, index) => {
-            if (index < energyMods.length) {
-                queries.push({
-                    query: `${energyMods[index]} ${base} ${bpmRange}`,
-                    reason: `${vibe.energy_trend} energy ${vibe.primary_genre}`
-                });
-            } else {
-                queries.push({
-                    query: `${base} ${bpmRange}`,
-                    reason: `${vibe.primary_genre} vibe match`
+        console.log('🧠 MEW is deeply analyzing your taste...');
+        
+        // Extract actual artists and songs from queue for PERSONALIZED suggestions
+        const artistsInQueue = currentQueue.map(track => (track.artist || '').toLowerCase()).filter(artist => artist);
+        const songsInQueue = currentQueue.map(track => (track.name || '').toLowerCase()).filter(name => name);
+        
+        console.log(`🎵 Your artists: ${artistsInQueue.join(', ')}`);
+        console.log(`🎶 Your songs: ${songsInQueue.join(', ')}`);
+        
+        // 1. SIMILAR ARTIST RECOMMENDATIONS (Most Important!)
+        artistsInQueue.forEach(artist => {
+            const similarArtists = this.getSimilarArtists(artist);
+            if (similarArtists.length > 0) {
+                // Pick 2-3 random similar artists for variety
+                const selected = similarArtists.sort(() => Math.random() - 0.5).slice(0, 3);
+                selected.forEach(similarArtist => {
+                    queries.push({
+                        query: `${similarArtist}`,
+                        reason: `Similar to ${artist} (from your queue)`,
+                        type: 'similar_artist',
+                        confidence: 90
+                    });
                 });
             }
         });
+        
+        // 2. SIMILAR SONG/BEAT ANALYSIS
+        songsInQueue.forEach(song => {
+            const similarTracks = this.getSimilarTracks(song);
+            similarTracks.forEach(track => {
+                queries.push({
+                    query: track,
+                    reason: `Similar beat/style to "${song}"`,
+                    type: 'similar_beat',
+                    confidence: 85
+                });
+            });
+        });
+        
+        // 3. COLLABORATIVE FILTERING (People who like X also like Y)
+        if (artistsInQueue.length >= 2) {
+            const collabRecommendations = this.getCollaborativeRecommendations(artistsInQueue);
+            collabRecommendations.forEach(rec => {
+                queries.push({
+                    query: rec.artist,
+                    reason: rec.reason,
+                    type: 'collaborative',
+                    confidence: 85
+                });
+            });
+        }
+        
+        // 4. FEATURE-BASED MATCHING (BPM, Energy, Valence)
+        const featureQueries = this.generateFeatureBasedQueries(vibe, artistsInQueue);
+        queries.push(...featureQueries);
+        
+        // 5. FALLBACK GENRE QUERIES (Only if we need more)
+        if (queries.length < 8) {
+            const genreQueries = this.getGenreQueries(vibe);
+            queries.push(...genreQueries.slice(0, 8 - queries.length));
+        }
+        
+        return queries.slice(0, 12); // Return best 12 personalized queries
+    }
 
+    static getSimilarArtists(artist) {
+        const similarMap = {
+            // Hip-Hop & Rap
+            'drake': ['future', 'lil wayne', 'travis scott', 'j cole', 'big sean'],
+            'travis scott': ['don toliver', 'kid cudi', 'playboi carti', 'lil uzi vert', 'future'],
+            'kendrick lamar': ['j cole', 'joey badass', 'schoolboy q', 'isaiah rashad', 'vince staples'],
+            'j cole': ['kendrick lamar', 'big sean', 'wale', 'drake', 'bas'],
+            'future': ['young thug', 'gunna', 'lil baby', 'metro boomin', 'travis scott'],
+            'kanye west': ['kid cudi', 'pusha t', 'tyler the creator', 'jay-z', 'don toliver'],
+            'lil baby': ['gunna', 'lil durk', 'dababy', 'roddy ricch', 'polo g'],
+            'migos': ['rae sremmurd', 'lil yachty', 'young thug', '21 savage', 'quality control'],
+            '21 savage': ['metro boomin', 'offset', 'lil uzi vert', 'playboi carti', 'savage mode'],
+            'young thug': ['gunna', 'lil keed', 'future', 'travis scott', 'slime'],
+            'lil uzi vert': ['playboi carti', 'lil yachty', 'travis scott', '21 savage', 'future'],
+            'playboi carti': ['lil uzi vert', 'travis scott', 'pierre bourne', 'young nudy', 'ken carson'],
+            
+            // Reggaeton & Latin
+            'bad bunny': ['ozuna', 'j balvin', 'anuel aa', 'karol g', 'rauw alejandro'],
+            'ozuna': ['maluma', 'nicky jam', 'farruko', 'wisin', 'daddy yankee'],
+            'j balvin': ['maluma', 'sebastián yatra', 'camilo', 'manuel turizo', 'mike towers'],
+            'maluma': ['j balvin', 'ozuna', 'sebastián yatra', 'rauw alejandro', 'ricky martin'],
+            'daddy yankee': ['don omar', 'wisin y yandel', 'nicky jam', 'farruko', 'arcángel'],
+            
+            // Electronic & EDM
+            'calvin harris': ['david guetta', 'martin garrix', 'tiësto', 'zedd', 'diplo'],
+            'skrillex': ['diplo', 'major lazer', 'flume', 'odesza', 'porter robinson'],
+            'deadmau5': ['eric prydz', 'above & beyond', 'armin van buuren', 'kaskade', 'swedish house mafia'],
+            'martin garrix': ['hardwell', 'nicky romero', 'oliver heldens', 'don diablo', 'afrojack'],
+            'david guetta': ['calvin harris', 'tiësto', 'martin garrix', 'zedd', 'hardwell'],
+            'the chainsmokers': ['marshmello', 'kygo', 'zedd', 'major lazer', 'odesza'],
+            
+            // Pop & Mainstream  
+            'ariana grande': ['dua lipa', 'billie eilish', 'olivia rodrigo', 'doja cat', 'taylor swift'],
+            'the weeknd': ['bruno mars', 'post malone', 'dua lipa', 'sza', 'frank ocean'],
+            'dua lipa': ['doja cat', 'ariana grande', 'billie eilish', 'taylor swift', 'olivia rodrigo'],
+            'post malone': ['juice wrld', 'lil peep', 'xxxtentacion', 'trippie redd', 'the weeknd'],
+            'billie eilish': ['clairo', 'rex orange county', 'boy pablo', 'cuco', 'kali uchis'],
+            
+            // R&B & Neo-Soul
+            'sza': ['summer walker', 'jhené aiko', 'kali uchis', 'daniel caesar', 'frank ocean'],
+            'frank ocean': ['daniel caesar', 'the weeknd', 'miguel', 'bryson tiller', 'brent faiyaz'],
+            'daniel caesar': ['kali uchis', 'sza', 'frank ocean', 'miguel', 'summer walker'],
+            'bryson tiller': ['tory lanez', 'partynextdoor', 'the weeknd', 'miguel', 'chris brown']
+        };
+        
+        return similarMap[artist] || [];
+    }
+
+    static getSimilarTracks(song) {
+        const trackMap = {
+            'sicko mode': ['goosebumps travis scott', 'antidote travis scott', 'butterfly effect'],
+            'god\'s plan': ['in my feelings drake', 'nice for what drake', 'toosie slide'],
+            'rockstar': ['congratulations post malone', 'circles post malone', 'sunflower'],
+            'lucid dreams': ['all girls are the same', 'robbery juice wrld', 'legends'],
+            'blinding lights': ['save your tears weeknd', 'can\'t feel my face', 'starboy'],
+            'levitating': ['don\'t start now dua lipa', 'physical dua lipa', 'break my heart'],
+            'dakiti': ['la canción bad bunny', 'yo perreo sola', 'safaera'],
+            'positions': ['34+35 ariana grande', '7 rings', 'thank u next'],
+            'watermelon sugar': ['adore you harry styles', 'golden', 'treat people with kindness'],
+        };
+        
+        for (const [key, tracks] of Object.entries(trackMap)) {
+            if (song.includes(key.split(' ')[0]) || key.includes(song.split(' ')[0])) {
+                return tracks;
+            }
+        }
+        return [];
+    }
+
+    static getCollaborativeRecommendations(artists) {
+        const recommendations = [];
+        
+        // Common combinations and what fans also like
+        const combos = {
+            ['drake', 'future']: ['lil wayne', 'nicki minaj', 'young money'],
+            ['travis scott', 'future']: ['don toliver', 'playboi carti', 'lil uzi vert'],
+            ['bad bunny', 'j balvin']: ['ozuna', 'anuel aa', 'karol g'],
+            ['calvin harris', 'david guetta']: ['martin garrix', 'tiësto', 'hardwell'],
+            ['kendrick lamar', 'j cole']: ['joey badass', 'danny brown', 'vince staples']
+        };
+        
+        for (const [combo, recs] of Object.entries(combos)) {
+            if (combo.every(artist => artists.includes(artist))) {
+                recs.forEach(rec => {
+                    recommendations.push({
+                        artist: rec,
+                        reason: `Fans of ${combo.join(' + ')} love ${rec}`
+                    });
+                });
+            }
+        }
+        
+        return recommendations;
+    }
+
+    static generateFeatureBasedQueries(vibe, artists) {
+        const queries = [];
+        
+        // BPM-based queries
+        if (vibe.average_bpm >= 60 && vibe.average_bpm <= 90 && vibe.primary_genre.includes('hip-hop')) {
+            queries.push({
+                query: `${vibe.average_bpm} bpm trap beats`,
+                reason: `Matching your ${vibe.average_bpm} BPM hip-hop style`,
+                type: 'bpm_match',
+                confidence: 75
+            });
+        }
+        
+        // Energy-based queries
+        if (vibe.average_energy > 80) {
+            queries.push({
+                query: `high energy ${vibe.primary_genre} bangers`,
+                reason: `High energy tracks (${vibe.average_energy}% energy)`,
+                type: 'energy_match',
+                confidence: 70
+            });
+        }
+        
         return queries;
     }
 
-    static scoreTrackForVibe(track, vibe) {
+    static getGenreQueries(vibe) {
+        const fallbackQueries = {
+            'hip-hop': [`${vibe.primary_genre} party`, `rap bangers`, 'hip hop hits'],
+            'trap': ['trap bangers', 'atlanta trap', 'modern trap'],
+            'reggaeton': ['reggaeton hits', 'perreo', 'latin party'],
+            'electronic': ['electronic dance', 'house music', 'festival EDM'],
+            'pop': ['pop hits', 'mainstream dance', 'radio hits']
+        };
+        
+        const queries = fallbackQueries[vibe.primary_genre] || ['party music'];
+        return queries.map(query => ({
+            query,
+            reason: `${vibe.primary_genre} fallback`,
+            type: 'genre_fallback',
+            confidence: 50
+        }));
+    }
+
+    static scoreTrackForVibe(track, vibe, currentQueue = []) {
         let score = 50; // Base score
         
         const trackName = (track.name || '').toLowerCase();
         const artistName = (track.artist || '').toLowerCase();
         const combined = `${trackName} ${artistName}`;
         
-        // Expanded genre matching keywords for all party types
+        // PERSONALIZED SCORING: Check if artist is similar to queue artists
+        const queueArtists = currentQueue.map(t => (t.artist || '').toLowerCase());
+        let personalizedBonus = 0;
+        
+        queueArtists.forEach(queueArtist => {
+            // Direct artist match (same artist in queue)
+            if (artistName === queueArtist) {
+                personalizedBonus += 30; // Big bonus for same artist
+                console.log(`  🎯 SAME ARTIST: ${artistName} (+30 points)`);
+            } else {
+                // Check if this is a similar artist
+                const similarArtists = this.getSimilarArtists(queueArtist);
+                if (similarArtists.some(similar => artistName.includes(similar.toLowerCase()))) {
+                    personalizedBonus += 25; // Big bonus for similar artists
+                    console.log(`  🎯 SIMILAR ARTIST: ${artistName} is similar to ${queueArtist} (+25 points)`);
+                }
+            }
+        });
+        
+        score += personalizedBonus;
+        
+        // COLLABORATIVE FILTERING: Check if track fits user's taste patterns
+        const collaborativeBonus = this.calculateCollaborativeScore(track, currentQueue);
+        score += collaborativeBonus;
+        
+        // Enhanced genre matching with MORE specific keywords
         const genreKeywords = {
-            'high-energy-dance': ['dance', 'remix', 'festival', 'club', 'energy', 'party', 'banger', 'anthem'],
-            'electronic': ['electronic', 'synth', 'house', 'techno', 'beat', 'mix', 'edm', 'rave'],
-            'hip-hop': ['hip hop', 'rap', 'freestyle', 'cipher', 'bars', 'flow', 'beats', 'mixtape'],
-            'rap': ['rap', 'rapper', 'spitter', 'lyrical', 'bars', 'verse', 'hook', 'banger'],
-            'trap': ['trap', 'drill', 'mumble', 'auto-tune', 'adlibs', 'sauce', 'slaps', 'goes hard'],
-            'reggaeton': ['reggaeton', 'perreo', 'dembow', 'latino', 'urbano', 'fiesta', 'party'],
-            'latin': ['latin', 'latino', 'spanish', 'salsa', 'bachata', 'merengue', 'cumbia'],
-            'pop': ['pop', 'mainstream', 'radio', 'hit', 'single', 'chart', 'billboard'],
-            'r&b': ['r&b', 'rnb', 'soul', 'smooth', 'vocals', 'melody', 'groove'],
-            'feel-good': ['happy', 'good', 'love', 'feel', 'positive', 'up', 'vibes', 'mood'],
-            'chill': ['chill', 'ambient', 'mellow', 'soft', 'calm', 'relax', 'laid back']
+            'hip-hop': ['hip hop', 'rap', 'freestyle', 'cipher', 'bars', 'flow', 'beats', 'mixtape', 'trap', 'drill'],
+            'rap': ['rap', 'rapper', 'spitter', 'lyrical', 'bars', 'verse', 'hook', 'banger', 'freestyle'],
+            'trap': ['trap', 'drill', 'mumble', 'auto-tune', 'adlibs', 'sauce', 'slaps', 'goes hard', 'atlanta'],
+            'reggaeton': ['reggaeton', 'perreo', 'dembow', 'latino', 'urbano', 'fiesta', 'party', 'latin'],
+            'electronic': ['electronic', 'synth', 'house', 'techno', 'beat', 'mix', 'edm', 'rave', 'festival'],
+            'pop': ['pop', 'mainstream', 'radio', 'hit', 'single', 'chart', 'billboard', 'dance'],
+            'r&b': ['r&b', 'rnb', 'soul', 'smooth', 'vocals', 'melody', 'groove', 'neo soul']
         };
 
-        // Enhanced mood matching keywords
+        // Enhanced mood matching 
         const moodKeywords = {
-            'party': ['party', 'club', 'wild', 'crazy', 'lit', 'fire', 'banger', 'slaps', 'goes hard'],
-            'rave': ['rave', 'festival', 'drop', 'bass', 'build', 'euphoria', 'energy', 'insane'],
-            'energetic': ['energy', 'power', 'intense', 'strong', 'hype', 'pump', 'adrenaline'],
-            'uplifting': ['up', 'rise', 'lift', 'high', 'bright', 'positive', 'good vibes'],
-            'smooth': ['smooth', 'silk', 'butter', 'flow', 'groove', 'vibe', 'chill'],
-            'relaxed': ['calm', 'peace', 'soft', 'gentle', 'quiet', 'mellow', 'laid back']
+            'party': ['party', 'club', 'wild', 'crazy', 'lit', 'fire', 'banger', 'slaps', 'goes hard', 'turn up'],
+            'energetic': ['energy', 'power', 'intense', 'strong', 'hype', 'pump', 'adrenaline', 'beast'],
+            'uplifting': ['up', 'rise', 'lift', 'high', 'bright', 'positive', 'good vibes', 'feel good'],
+            'smooth': ['smooth', 'silk', 'butter', 'flow', 'groove', 'vibe', 'chill', 'mellow']
         };
 
         // Score based on genre match
         const genreWords = genreKeywords[vibe.primary_genre] || [];
         genreWords.forEach(keyword => {
-            if (combined.includes(keyword)) score += 15;
+            if (combined.includes(keyword)) {
+                score += 15;
+                console.log(`  🎵 Genre match: "${keyword}" (+15 points)`);
+            }
         });
 
         // Score based on mood match  
         const moodWords = moodKeywords[vibe.mood] || [];
         moodWords.forEach(keyword => {
-            if (combined.includes(keyword)) score += 10;
-        });
-
-        // Legendary artist bonuses by genre
-        const legendaryArtists = {
-            'hip-hop': [
-                'kendrick lamar', 'j cole', 'drake', 'kanye', 'jay-z', 'nas', 'eminem', 'tupac', 
-                'biggie', 'ice cube', 'snoop dogg', 'dr dre', 'outkast', 'wu-tang', 'rakim'
-            ],
-            'rap': [
-                'kendrick', 'cole', 'drake', 'travis scott', 'future', 'lil wayne', 'nicki minaj',
-                'cardi b', 'megan thee stallion', 'dababy', 'roddy ricch', 'polo g'
-            ],
-            'trap': [
-                'migos', 'future', 'travis scott', '21 savage', 'lil baby', 'gunna', 'young thug',
-                'metro boomin', 'southside', 'zaytoven', 'lex luger', 'pierre bourne'
-            ],
-            'reggaeton': [
-                'bad bunny', 'ozuna', 'maluma', 'j balvin', 'daddy yankee', 'don omar', 
-                'wisin y yandel', 'nicky jam', 'farruko', 'anuel aa', 'karol g'
-            ],
-            'electronic': [
-                'avicii', 'calvin harris', 'deadmau5', 'skrillex', 'martin garrix', 'tiësto',
-                'david guetta', 'diplo', 'zedd', 'marshmello', 'chainsmokers', 'swedish house mafia'
-            ],
-            'pop': [
-                'taylor swift', 'ariana grande', 'dua lipa', 'billie eilish', 'the weeknd',
-                'bruno mars', 'ed sheeran', 'justin bieber', 'olivia rodrigo', 'doja cat'
-            ],
-            'r&b': [
-                'the weeknd', 'sza', 'frank ocean', 'daniel caesar', 'bryson tiller',
-                'summer walker', 'jhené aiko', 'miguel', 'usher', 'chris brown'
-            ]
-        };
-
-        // Apply legendary artist bonus
-        const artistsForGenre = legendaryArtists[vibe.primary_genre] || [];
-        artistsForGenre.forEach(artist => {
-            if (artistName.includes(artist) || combined.includes(artist)) {
-                score += 25; // Big bonus for legendary artists
+            if (combined.includes(keyword)) {
+                score += 12;
+                console.log(`  😎 Mood match: "${keyword}" (+12 points)`);
             }
         });
 
-        // Special party keywords get extra points
-        const partyKeywords = ['banger', 'slaps', 'goes hard', 'fire', 'lit', 'anthem', 'club', 'party'];
+        // ENHANCED LEGENDARY ARTIST RECOGNITION
+        const isLegendaryArtist = this.checkLegendaryArtist(artistName, vibe.primary_genre);
+        if (isLegendaryArtist) {
+            score += 20;
+            console.log(`  🏆 Legendary artist: ${artistName} (+20 points)`);
+        }
+
+        // Party keywords bonus
+        const partyKeywords = ['banger', 'slaps', 'goes hard', 'fire', 'lit', 'anthem', 'hits'];
         partyKeywords.forEach(keyword => {
-            if (combined.includes(keyword)) score += 12;
+            if (combined.includes(keyword)) {
+                score += 10;
+                console.log(`  🔥 Party keyword: "${keyword}" (+10 points)`);
+            }
         });
 
-        // Energy-based adjustments
-        if (vibe.mood === 'party' && combined.includes('energy')) score += 15;
-        if (vibe.mood === 'rave' && (combined.includes('drop') || combined.includes('bass'))) score += 20;
+        // Recency bonus (newer tracks often fit better)
+        if (track.release_date) {
+            const releaseYear = new Date(track.release_date).getFullYear();
+            const currentYear = new Date().getFullYear();
+            if (currentYear - releaseYear <= 3) {
+                score += 8; // Recent tracks bonus
+                console.log(`  🆕 Recent track (${releaseYear}) (+8 points)`);
+            }
+        }
         
-        return Math.min(100, score); // Cap at 100
+        const finalScore = Math.min(100, score);
+        console.log(`  📊 Final score for "${track.name}" by ${artistName}: ${finalScore}/100`);
+        
+        return finalScore;
+    }
+
+    static calculateCollaborativeScore(track, currentQueue) {
+        // Analyze patterns in user's queue to predict if they'll like this track
+        let collaborativeScore = 0;
+        const trackArtist = (track.artist || '').toLowerCase();
+        const trackName = (track.name || '').toLowerCase();
+        
+        // Check for artist collaboration patterns
+        const queueArtists = currentQueue.map(t => (t.artist || '').toLowerCase());
+        
+        // If user likes multiple artists from same label/region, bonus for similar artists
+        const atlantaArtists = ['future', 'migos', '21 savage', 'lil baby', 'gunna', 'young thug'];
+        const ovo = ['drake', 'partynextdoor', 'majid jordan', 'plaza'];
+        const roc = ['jay-z', 'kanye', 'rihanna', 'j cole'];
+        
+        const checkLabelBonus = (labelArtists) => {
+            const queueMatches = queueArtists.filter(artist => 
+                labelArtists.some(labelArtist => artist.includes(labelArtist))
+            ).length;
+            
+            if (queueMatches >= 2 && labelArtists.some(labelArtist => trackArtist.includes(labelArtist))) {
+                return 15; // User likes this label/sound
+            }
+            return 0;
+        };
+        
+        collaborativeScore += checkLabelBonus(atlantaArtists);
+        collaborativeScore += checkLabelBonus(ovo);
+        collaborativeScore += checkLabelBonus(roc);
+        
+        return collaborativeScore;
+    }
+
+    static checkLegendaryArtist(artistName, genre) {
+        const legendaryByGenre = {
+            'hip-hop': ['kendrick lamar', 'j cole', 'drake', 'kanye', 'jay-z', 'nas', 'eminem'],
+            'trap': ['future', 'travis scott', '21 savage', 'lil baby', 'gunna', 'young thug', 'migos'],
+            'reggaeton': ['bad bunny', 'ozuna', 'j balvin', 'daddy yankee', 'maluma'],
+            'electronic': ['calvin harris', 'deadmau5', 'skrillex', 'martin garrix', 'tiësto', 'david guetta'],
+            'pop': ['taylor swift', 'ariana grande', 'dua lipa', 'the weeknd', 'billie eilish'],
+            'r&b': ['sza', 'frank ocean', 'daniel caesar', 'the weeknd', 'bryson tiller']
+        };
+        
+        const legends = legendaryByGenre[genre] || [];
+        return legends.some(legend => artistName.includes(legend));
     }
 
     static async autoFillQueue(currentQueue, spotify) {
-        console.log('🤖 MEW is analyzing your vibe and finding perfect songs...');
+        console.log('🤖 MEW is analyzing your specific taste and finding personalized songs...');
         
-        // Analyze current vibe
+        // Analyze current vibe with enhanced intelligence
         const vibe = DJIntelligence.analyzeQueueVibe(currentQueue);
         
-        // Find complementary tracks
-        const suggestedTracks = await this.findSongsForVibe(vibe, spotify, 3);
+        console.log(`🧠 MEW detected: ${vibe.mood} ${vibe.primary_genre} vibe`);
+        console.log(`📊 Queue stats: ${vibe.average_bpm} BPM, ${vibe.average_energy}% energy, ${vibe.average_valence}% valence`);
+        
+        // Find PERSONALIZED tracks based on actual queue content
+        const suggestedTracks = await this.findSongsForVibe(vibe, spotify, 3, currentQueue);
         
         return {
             vibe: vibe,
             suggestions: suggestedTracks,
-            reasoning: `Found ${suggestedTracks.length} tracks that match your ${vibe.mood} ${vibe.primary_genre} vibe`
+            reasoning: `MEW analyzed your specific taste and found ${suggestedTracks.length} tracks that perfectly match your ${vibe.mood} ${vibe.primary_genre} style`
         };
     }
 }
