@@ -996,38 +996,149 @@ class DJMEWv2 {
         return { ...techniques.psychic_crossfade, key: 'psychic_crossfade' };
     }
 
-    // Execute the chosen transition technique with REAL AUDIO effects - ENHANCED!
+    // Execute legendary transitions with LAYERED AUDIO effects!
     executeTransitionTechnique(technique, fromTrack, toTrack) {
-        console.log(`🎛️ Executing ${technique.name} with REAL audio effects...`);
+        console.log(`🎛️ Executing ${technique.name} with LAYERED audio effects over music...`);
         
         // Calculate intelligent effect volumes based on track energy and genre
         const baseVolume = this.calculateIntelligentEffectVolume(fromTrack, toTrack, technique);
         
-        // Audio + Visual effects sequence (non-blocking)
+        // Check if this is a complex transition that needs multiple simultaneous effects
+        if (technique.effects.length > 3 && this.shouldUseLayeredEffects(technique)) {
+            // ADVANCED: Play multiple effects simultaneously for complex transitions
+            this.executeLayeredTransition(technique, baseVolume);
+        } else {
+            // STANDARD: Play effects in sequence
+            this.executeSequentialTransition(technique, baseVolume);
+        }
+        
+        // Crossfader animation
+        this.animateTransitionCrossfader(technique);
+        
+        return Promise.resolve();
+    }
+
+    // NEW: Execute transition with multiple simultaneous effects
+    async executeLayeredTransition(technique, baseVolume) {
+        console.log(`🎪 ADVANCED: Layering multiple effects simultaneously for ${technique.name}`);
+        
+        // Group effects into layers that play together
+        const layerGroups = this.groupEffectsForLayering(technique.effects);
+        
+        layerGroups.forEach((effectGroup, groupIndex) => {
+            setTimeout(async () => {
+                const volumes = effectGroup.map(() => baseVolume * (0.8 + groupIndex * 0.1));
+                
+                if (this.audioEffects && this.audioEffects.playLayeredEffects) {
+                    // Play multiple effects at once
+                    const audioEffectNames = effectGroup
+                        .map(effect => this.getAudioEffectName(effect))
+                        .filter(name => name);
+                        
+                    if (audioEffectNames.length > 1) {
+                        console.log(`🎛️ Layering ${audioEffectNames.length} effects:`, audioEffectNames);
+                        await this.audioEffects.playLayeredEffects(audioEffectNames, volumes);
+                        this.showNotification(`🎪 ${audioEffectNames.length} EFFECTS LAYERED!`, 'success', 1200);
+                    } else {
+                        // Fallback to single effect
+                        await this.activateTransitionEffect(effectGroup[0], volumes[0]);
+                    }
+                } else {
+                    // Fallback: play effects quickly in sequence
+                    for (let i = 0; i < effectGroup.length; i++) {
+                        setTimeout(async () => {
+                            await this.activateTransitionEffect(effectGroup[i], volumes[i]);
+                        }, i * 200);
+                    }
+                }
+            }, groupIndex * 1500); // Stagger layer groups
+        });
+    }
+
+    // STANDARD: Execute effects in sequence  
+    executeSequentialTransition(technique, baseVolume) {
         const effectDuration = technique.duration / technique.effects.length;
         
         technique.effects.forEach((effect, i) => {
             setTimeout(async () => {
-                console.log(`🎪 Applying ${effect} effect with intelligent volume`);
+                console.log(`🎪 Sequentially applying ${effect} effect`);
                 
                 // Calculate volume for this specific effect
-                const effectVolume = baseVolume * (1 + (i * 0.1)); // Slight increase per effect
+                const effectVolume = baseVolume * (1 + (i * 0.1));
                 
-                // Activate REAL audio + visual effect
+                // Activate REAL audio + visual effect (layered over music)
                 await this.activateTransitionEffect(effect, effectVolume);
                 
-                // Show crossfader movement
-                this.animateCrossfader(i / technique.effects.length);
             }, effectDuration * i);
         });
+    }
+
+    // Group effects for simultaneous layering
+    groupEffectsForLayering(effects) {
+        // Group complementary effects that sound good together
+        const groups = [];
+        let currentGroup = [];
         
-        // Final crossfader position
-        setTimeout(() => {
-            this.animateCrossfader(1.0);
-        }, technique.duration);
+        effects.forEach((effect, index) => {
+            currentGroup.push(effect);
+            
+            // Start new group for certain effect types or after 2-3 effects
+            if (currentGroup.length >= 3 || 
+                effect.includes('drop') || 
+                effect.includes('massive') ||
+                index === effects.length - 1) {
+                groups.push([...currentGroup]);
+                currentGroup = [];
+            }
+        });
         
-        // Return immediately (non-blocking)
-        return Promise.resolve();
+        return groups.filter(group => group.length > 0);
+    }
+
+    // Check if transition should use layered effects
+    shouldUseLayeredEffects(technique) {
+        const layeredTechniques = [
+            'explosive_drop', 'massive_drop', 'festival_buildup', 
+            'euphoric_drop', 'anthem_rise', 'party_climax'
+        ];
+        
+        return layeredTechniques.some(name => 
+            technique.name.toLowerCase().includes(name) || 
+            technique.key?.toLowerCase().includes(name)
+        );
+    }
+
+    // Get audio effect name for an effect
+    getAudioEffectName(effect) {
+        const audioEffectMap = {
+            'triple_air_horn': 'air_horn',
+            'dj_khaled_vocal': 'air_horn',
+            'turntable_scratch': 'scratch',
+            'vinyl_cut': 'scratch',
+            'scratch_blend': 'scratch',
+            'explosive_drop': 'impact',
+            'bass_drop_impact': 'impact',
+            'laser_sweep': 'laser',
+            'electronic_drop': 'impact',
+            'rave_siren': 'siren',
+            'crowd_cheer': 'crowd',
+            'party_whistle': 'whoosh',
+            'whoosh': 'whoosh',
+            'ambient_wash': 'whoosh',
+            'crossfade_magic': 'whoosh'
+        };
+        
+        return audioEffectMap[effect];
+    }
+
+    // Animate crossfader for transitions
+    animateTransitionCrossfader(technique) {
+        const steps = Math.max(3, technique.effects.length);
+        for (let i = 0; i <= steps; i++) {
+            setTimeout(() => {
+                this.animateCrossfader(i / steps);
+            }, (technique.duration / steps) * i);
+        }
     }
 
     // Calculate intelligent effect volume based on track characteristics
@@ -1088,15 +1199,15 @@ class DJMEWv2 {
     async activateTransitionEffect(effect, volume = null) {
         console.log(`🔊 MEW activating REAL effect: ${effect}`);
         
-        // Map effects to actual audio samples
+        // Map effects to simple audio samples (layered over music!)
         const audioEffectMap = {
             // Hip-Hop & Rap Effects  
-            'triple_air_horn': 'air_horn_triple',
-            'dj_khaled_vocal': 'air_horn_triple', // Fallback to air horn
-            'turntable_scratch': 'scratch_baby',
-            'vinyl_cut': 'scratch_baby',
-            'scratch_blend': 'scratch_baby',
-            'rewind_sound': 'rewind',
+            'triple_air_horn': 'air_horn',
+            'dj_khaled_vocal': 'air_horn',
+            'turntable_scratch': 'scratch',
+            'vinyl_cut': 'scratch',
+            'scratch_blend': 'scratch',
+            'rewind_sound': 'whoosh',
             'explosive_drop': 'impact',
             
             // Trap & Modern Effects
@@ -1106,17 +1217,17 @@ class DJMEWv2 {
             'dj_mustard_tag': 'impact',
             
             // Reggaeton & Latin Effects
-            'latin_air_horn': 'air_horn_triple',
-            'crowd_chant': 'crowd_cheer',
+            'latin_air_horn': 'air_horn',
+            'crowd_chant': 'crowd',
             'perreo_buildup': 'impact',
-            'spanish_vocal_shout': 'air_horn_triple',
+            'spanish_vocal_shout': 'air_horn',
             'party_whistle': 'whoosh',
             'latin_buildup': 'impact',
             
             // Electronic & Rave Effects
-            'laser_sweep': 'laser_sweep',
+            'laser_sweep': 'laser',
             'electronic_drop': 'impact',
-            'rave_siren': 'rave_siren',
+            'rave_siren': 'siren',
             'euphoric_drop': 'impact',
             'whoosh': 'whoosh',
             
@@ -1128,19 +1239,19 @@ class DJMEWv2 {
             'silk_transition': 'whoosh',
             
             // Crowd Interaction Effects
-            'crowd_cheer': 'crowd_cheer',
-            'applause': 'crowd_cheer',
-            'countdown_vocal': 'countdown',
-            'crowd_anticipation': 'crowd_cheer',
+            'crowd_cheer': 'crowd',
+            'applause': 'crowd',
+            'countdown_vocal': 'air_horn', // Use air horn as countdown
+            'crowd_anticipation': 'crowd',
             'massive_drop': 'impact',
             'anthem_rise': 'impact',
             
             // Universal Effects
             'ambient_wash': 'whoosh',
             'tempo_shift': 'impact',
-            'psychic_energy': 'laser_sweep',
+            'psychic_energy': 'laser',
             'crossfade_magic': 'whoosh',
-            'mew_signature': 'laser_sweep'
+            'mew_signature': 'laser'
         };
         
         const visualEffectMap = {
@@ -1198,25 +1309,25 @@ class DJMEWv2 {
             'mew_signature': 'effect-filter'
         };
         
-        // PLAY SIMPLE, RELIABLE AUDIO EFFECT!
+        // LAYER AUDIO EFFECT ON TOP OF MUSIC!
         const audioEffectName = audioEffectMap[effect];
         if (audioEffectName && this.audioEffects) {
             try {
-                console.log(`🎬 MEW playing SIMPLE effect: ${audioEffectName} for ${effect}`);
+                console.log(`🎬 MEW layering effect: ${audioEffectName} over music for ${effect}`);
                 
-                // Play the effect with simple HTML5 audio (no complex Web Audio API)
-                const effectVolume = volume ? Math.min(1.0, volume * 1.1) : 0.8;
+                // Play effect layered over Spotify music (both play simultaneously)
+                const effectVolume = volume ? Math.min(1.0, volume * 1.1) : null; // Use default layered volume
                 const success = await this.audioEffects.playEffect(audioEffectName, effectVolume);
                 
                 if (success) {
-                    console.log(`🔊 SUCCESS: ${audioEffectName} played for ${effect}`);
-                    this.showNotification(`🔊 ${audioEffectName.toUpperCase()}!`, 'success', 1000);
+                    console.log(`🔊 LAYERED: ${audioEffectName} over Spotify music for ${effect}`);
+                    this.showNotification(`🎛️ ${audioEffectName.toUpperCase()} + MUSIC!`, 'success', 1500);
                 } else {
-                    console.warn(`⚠️ Effect may not have played: ${audioEffectName}`);
+                    console.warn(`⚠️ Effect layering may have failed: ${audioEffectName}`);
                 }
                 
             } catch (audioError) {
-                console.error(`❌ Audio effect failed: ${audioEffectName}`, audioError);
+                console.error(`❌ Audio layering failed: ${audioEffectName}`, audioError);
             }
         } else {
             console.warn(`🔇 No audio mapping for effect: ${effect}, using visual only`);
@@ -2613,6 +2724,82 @@ class DJMEWv2 {
         } catch (error) {
             console.error('Effect testing error:', error);
             this.showNotification('Failed to test effects: ' + error.message, 'error');
+        }
+    }
+
+    // NEW: Test layered effects (multiple effects playing simultaneously)
+    async testLayeredEffects() {
+        if (!this.audioEffects) {
+            this.showNotification('Audio effects not initialized!', 'error');
+            return;
+        }
+        
+        try {
+            console.log('🎛️ Testing layered effects (multiple sounds simultaneously)...');
+            this.showNotification('🎛️ Testing LAYERED effects - multiple sounds at once!', 'info');
+            
+            if (this.audioEffects.playLayeredEffects) {
+                // Test different combinations of layered effects
+                const testCombinations = [
+                    {
+                        name: 'Hip-Hop Party',
+                        effects: ['air_horn', 'scratch', 'crowd'],
+                        volumes: [0.8, 0.6, 0.4]
+                    },
+                    {
+                        name: 'Electronic Drop',
+                        effects: ['laser', 'impact', 'siren'],
+                        volumes: [0.7, 0.9, 0.5]
+                    },
+                    {
+                        name: 'Festival Build',
+                        effects: ['crowd', 'siren', 'whoosh'],
+                        volumes: [0.6, 0.7, 0.4]
+                    }
+                ];
+                
+                for (let i = 0; i < testCombinations.length; i++) {
+                    const combo = testCombinations[i];
+                    console.log(`🎪 Testing ${combo.name}: ${combo.effects.join(' + ')}`);
+                    this.showNotification(`🎪 ${combo.name}: ${combo.effects.join(' + ').toUpperCase()}`, 'success', 2000);
+                    
+                    const success = await this.audioEffects.playLayeredEffects(combo.effects, combo.volumes);
+                    
+                    if (success) {
+                        console.log(`✅ ${combo.name} layered successfully`);
+                    } else {
+                        console.warn(`⚠️ ${combo.name} layering may have failed`);
+                    }
+                    
+                    // Wait between combinations
+                    if (i < testCombinations.length - 1) {
+                        await new Promise(resolve => setTimeout(resolve, 3000));
+                    }
+                }
+                
+                this.showNotification('✅ Layered effects test complete! Effects can play over music!', 'success');
+                
+            } else {
+                // Fallback: test effects in quick succession
+                console.log('🔄 Layered effects not available, testing rapid succession...');
+                const effects = ['air_horn', 'scratch', 'laser'];
+                
+                this.showNotification('🎵 Testing rapid succession (layering fallback)...', 'info');
+                
+                effects.forEach((effect, index) => {
+                    setTimeout(async () => {
+                        await this.testEffect(effect);
+                    }, index * 300);
+                });
+                
+                setTimeout(() => {
+                    this.showNotification('✅ Rapid succession test complete!', 'success');
+                }, 2000);
+            }
+            
+        } catch (error) {
+            console.error('Layered effects test error:', error);
+            this.showNotification('❌ Layered effects test failed: ' + error.message, 'error');
         }
     }
 

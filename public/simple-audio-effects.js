@@ -153,7 +153,7 @@ class SimpleAudioEffects {
         return URL.createObjectURL(blob);
     }
 
-    // Simple, reliable effect playback
+    // Layered effect playback - plays ON TOP of Spotify music!
     async playEffect(effectName, volume = null) {
         if (!this.isReady) {
             console.warn('⚠️ Simple effects not ready yet');
@@ -167,20 +167,56 @@ class SimpleAudioEffects {
         }
 
         try {
-            // Set volume
+            // Set volume for layering (slightly louder to cut through music)
             if (volume !== null) {
                 audio.volume = Math.max(0, Math.min(1, volume));
+            } else {
+                // Default volumes optimized for layering over music
+                const layeredVolumes = {
+                    'air_horn': 0.9,  // Air horns need to be heard!
+                    'scratch': 0.8,   // Scratches cut through
+                    'laser': 0.7,     // Lasers pierce through
+                    'impact': 0.9,    // Impacts need punch
+                    'whoosh': 0.5,    // Whooshes are subtle
+                    'crowd': 0.6,     // Crowd adds energy
+                    'siren': 0.8      // Sirens build tension
+                };
+                audio.volume = layeredVolumes[effectName] || 0.7;
             }
             
-            // Reset to beginning and play
+            // Reset to beginning and play (will layer with Spotify music)
             audio.currentTime = 0;
-            await audio.play();
             
-            console.log(`🔊 PLAYED: ${effectName} (volume: ${audio.volume.toFixed(2)})`);
+            // Clone the audio if we want to play multiple instances
+            const audioClone = audio.cloneNode();
+            audioClone.volume = audio.volume;
+            await audioClone.play();
+            
+            console.log(`🔊 LAYERED: ${effectName} over music (volume: ${audioClone.volume.toFixed(2)})`);
             return true;
             
         } catch (error) {
-            console.error(`❌ Failed to play ${effectName}:`, error);
+            console.error(`❌ Failed to layer ${effectName}:`, error);
+            return false;
+        }
+    }
+
+    // Play multiple effects simultaneously (for complex transitions)
+    async playLayeredEffects(effectNames, volumes = null) {
+        console.log(`🎛️ Playing ${effectNames.length} layered effects:`, effectNames);
+        
+        const promises = effectNames.map((effectName, index) => {
+            const volume = volumes ? volumes[index] : null;
+            return this.playEffect(effectName, volume);
+        });
+        
+        try {
+            const results = await Promise.all(promises);
+            const successCount = results.filter(r => r).length;
+            console.log(`✅ ${successCount}/${effectNames.length} effects layered successfully`);
+            return successCount > 0;
+        } catch (error) {
+            console.error('❌ Failed to play layered effects:', error);
             return false;
         }
     }

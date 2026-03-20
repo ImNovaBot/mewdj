@@ -2617,6 +2617,28 @@ body {
     box-shadow: 0 4px 12px rgba(168, 85, 247, 0.3);
 }
 
+.test-layered-btn {
+    background: linear-gradient(45deg, #f97316, #ea580c);
+    color: white;
+    border: none;
+    padding: 8px 12px;
+    border-radius: 12px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 0.8rem;
+}
+
+.test-layered-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(249, 115, 22, 0.4);
+}
+
+.test-layered-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 8px rgba(249, 115, 22, 0.3);
+}
+
 /* Enhanced Psychic Glow Animation */
 @keyframes psychic-glow {
     0% {
