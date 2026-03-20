@@ -25,7 +25,6 @@ let djState = {
 
 // Persistent Usage Statistics
 const fs = require('fs').promises;
-const path = require('path');
 
 const STATS_FILE = path.join(__dirname, 'usage-stats.json');
 
