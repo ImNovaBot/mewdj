@@ -777,6 +777,9 @@ class DJMEWv2 {
             // Execute the chosen technique
             await this.executeTransitionTechnique(technique, fromTrack, toTrack);
             
+            // Track transition in persistent stats
+            this.trackTransition();
+            
             // Start playing next track with perfect timing
             await this.startTrackPlayback(toTrack);
             
@@ -990,7 +993,20 @@ class DJMEWv2 {
     async basicTransition(fromTrack, toTrack) {
         console.log('🔄 Using basic transition fallback');
         await this.startTrackPlayback(toTrack);
+        this.trackTransition(); // Track fallback transitions too
         this.showNotification(`🔄 Basic transition to ${toTrack.name}`);
+    }
+
+    // Track transition in persistent stats
+    async trackTransition() {
+        try {
+            await fetch('/api/track-transition', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+        } catch (error) {
+            console.error('Failed to track transition:', error);
+        }
     }
 
     // Start track playback with MEW's smart timing
@@ -1274,6 +1290,131 @@ class DJMEWv2 {
             const hours = this.stats.renderHours || 0;
             renderEl.textContent = `${hours.toFixed(1)}h / 750h`;
         }
+
+        // Update comprehensive persistent stats
+        this.updateComprehensiveStats();
+    }
+
+    // Update comprehensive persistent statistics display
+    updateComprehensiveStats() {
+        const statsContainer = document.getElementById('comprehensive-stats');
+        if (!statsContainer || !this.stats) return;
+        
+        // Calculate cost estimates
+        const estimatedCost = this.calculateEstimatedCost(this.stats);
+        
+        statsContainer.innerHTML = `
+            <div class="comprehensive-stats-content">
+                <h4>📊 Persistent MEW Statistics</h4>
+                
+                <!-- MEW Intelligence Stats -->
+                <div class="stats-category legendary">
+                    <h5>🤖 MEW's Legendary Performance</h5>
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <span class="stat-label">Total Sessions:</span>
+                            <span class="stat-value highlight">${this.stats.sessionsTotal || 0}</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">DJ Transitions:</span>
+                            <span class="stat-value highlight">${this.stats.transitionsPerformed || 0}</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Songs Added by MEW:</span>
+                            <span class="stat-value highlight">${this.stats.autonomousSongsAdded || 0}</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Vibe Suggestions:</span>
+                            <span class="stat-value highlight">${this.stats.mewSuggestions || 0}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Usage Overview -->
+                <div class="stats-category">
+                    <h5>📈 Usage Overview</h5>
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <span class="stat-label">Total Uptime:</span>
+                            <span class="stat-value">${this.stats.totalUptime?.toFixed(1) || '0.0'}h</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Sessions Today:</span>
+                            <span class="stat-value">${this.stats.sessionsToday || 0}</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Days Active:</span>
+                            <span class="stat-value">${this.stats.daysSinceFirstLaunch || 0}</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Avg Session:</span>
+                            <span class="stat-value">${this.stats.avgSessionLength?.toFixed(1) || '0.0'}h</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Technical Performance -->
+                <div class="stats-category">
+                    <h5>⚡ Technical Performance</h5>
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <span class="stat-label">Songs Analyzed:</span>
+                            <span class="stat-value">${this.stats.songsAnalyzed || 0}</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">API Calls/Hour:</span>
+                            <span class="stat-value">${this.stats.apiCallsPerHour?.toFixed(1) || '0.0'}</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Queue Optimizations:</span>
+                            <span class="stat-value">${this.stats.queueOptimizations || 0}</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Songs/Session:</span>
+                            <span class="stat-value">${this.stats.songsPerSession?.toFixed(1) || '0.0'}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cost Tracking -->
+                <div class="stats-category cost-section">
+                    <h5>💰 Cost Tracking</h5>
+                    <div class="stats-grid">
+                        <div class="stat-item cost">
+                            <span class="stat-label">Render Cost:</span>
+                            <span class="stat-value">${estimatedCost.render}</span>
+                        </div>
+                        <div class="stat-item cost">
+                            <span class="stat-label">Spotify Premium:</span>
+                            <span class="stat-value">${estimatedCost.spotify}</span>
+                        </div>
+                        <div class="stat-item cost total">
+                            <span class="stat-label">Monthly Total:</span>
+                            <span class="stat-value">${estimatedCost.total}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // Calculate cost estimates based on usage
+    calculateEstimatedCost(stats) {
+        // Render.com pricing: ~$7/month for 750 hours
+        const renderHours = stats.totalUptime || 0;
+        const renderCostPerMonth = (renderHours / 750) * 7;
+        
+        // Spotify Premium: $9.99/month (fixed)
+        const spotifyPremium = 9.99;
+        
+        // Total monthly estimate
+        const totalMonthly = renderCostPerMonth + spotifyPremium;
+        
+        return {
+            render: `$${renderCostPerMonth.toFixed(2)}`,
+            spotify: `$${spotifyPremium.toFixed(2)}`,
+            total: `$${totalMonthly.toFixed(2)}`
+        };
     }
 
     // Notifications

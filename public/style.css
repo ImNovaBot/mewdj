@@ -2097,6 +2097,139 @@ body {
     justify-content: center;
 }
 
+/* Comprehensive Persistent Stats */
+.persistent-stats-section {
+    margin-top: 20px;
+}
+
+.comprehensive-stats {
+    background: linear-gradient(145deg, rgba(0, 0, 0, 0.6), rgba(26, 13, 38, 0.6));
+    border: 1px solid rgba(168, 85, 247, 0.3);
+    border-radius: 15px;
+    padding: 20px;
+    margin: 15px 0;
+}
+
+.comprehensive-stats-content h4 {
+    color: #a855f7;
+    text-align: center;
+    margin-bottom: 20px;
+    font-size: 1.2rem;
+}
+
+.stats-category {
+    margin-bottom: 20px;
+    background: rgba(168, 85, 247, 0.05);
+    padding: 15px;
+    border-radius: 10px;
+    border: 1px solid rgba(168, 85, 247, 0.2);
+}
+
+.stats-category h5 {
+    color: #c084fc;
+    margin-bottom: 10px;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.stats-category.legendary {
+    background: linear-gradient(145deg, rgba(168, 85, 247, 0.15), rgba(139, 92, 246, 0.1));
+    border: 2px solid rgba(168, 85, 247, 0.4);
+    animation: psychic-glow 4s ease-in-out infinite alternate;
+}
+
+.stats-category.legendary h5 {
+    color: #a855f7;
+    font-weight: bold;
+}
+
+.stats-category.cost-section {
+    background: linear-gradient(145deg, rgba(34, 197, 94, 0.1), rgba(16, 185, 129, 0.05));
+    border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.stats-category.cost-section h5 {
+    color: #10b981;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 10px;
+}
+
+.stat-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.stat-label {
+    color: #a1a1aa;
+    font-size: 0.9rem;
+}
+
+.stat-value {
+    color: white;
+    font-weight: bold;
+}
+
+.stat-value.highlight {
+    color: #a855f7;
+    text-shadow: 0 0 10px rgba(168, 85, 247, 0.3);
+    font-weight: bold;
+}
+
+.stat-item.cost {
+    background: rgba(34, 197, 94, 0.05);
+}
+
+.stat-item.cost .stat-value {
+    color: #10b981;
+}
+
+.stat-item.cost.total {
+    background: rgba(34, 197, 94, 0.1);
+    border: 1px solid rgba(34, 197, 94, 0.3);
+    font-weight: bold;
+}
+
+.stat-item.cost.total .stat-value {
+    color: #059669;
+    font-size: 1.1rem;
+}
+
+.stat-item.insight {
+    background: rgba(59, 130, 246, 0.05);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+.stat-item.insight .stat-value {
+    color: #3b82f6;
+}
+
+.stats-loading {
+    text-align: center;
+    color: #a1a1aa;
+    padding: 20px;
+    font-style: italic;
+}
+
+/* Enhanced Psychic Glow Animation */
+@keyframes psychic-glow {
+    0% {
+        box-shadow: 0 0 20px rgba(168, 85, 247, 0.3);
+    }
+    100% {
+        box-shadow: 0 0 30px rgba(168, 85, 247, 0.5), inset 0 0 20px rgba(168, 85, 247, 0.1);
+    }
+}
+
 @media (max-width: 768px) {
     .queue-controls {
         flex-direction: column;
@@ -2123,5 +2256,22 @@ body {
     .suggestions-actions {
         flex-direction: column;
         gap: 10px;
+    }
+
+    .stats-grid {
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+    
+    .comprehensive-stats {
+        padding: 15px;
+    }
+    
+    .stats-category {
+        padding: 12px;
+    }
+    
+    .stat-item {
+        padding: 6px 10px;
     }
 }

@@ -23,16 +23,108 @@ let djState = {
     analysisCache: new Map() // Cache song analysis to avoid repeated API calls
 };
 
-// Usage Statistics
+// Persistent Usage Statistics
+const fs = require('fs').promises;
+const path = require('path');
+
+const STATS_FILE = path.join(__dirname, 'usage-stats.json');
+
+// Default stats structure
 let usageStats = {
     spotifyAPICalls: 0,
     songsAnalyzed: 0,
     queueOptimizations: 0,
+    transitionsPerformed: 0,
+    autonomousSongsAdded: 0,
+    mewSuggestions: 0,
+    sessionsTotal: 0,
+    sessionsToday: 0,
+    totalUptime: 0,
     renderHours: 0,
     startTime: Date.now(),
-    sessionsToday: 0,
-    lastReset: new Date().toDateString()
+    lastReset: new Date().toDateString(),
+    firstLaunch: new Date().toISOString(),
+    lastSaved: new Date().toISOString()
 };
+
+// Load persistent stats on startup
+async function loadUsageStats() {
+    try {
+        console.log('📊 Loading persistent usage stats...');
+        const statsData = await fs.readFile(STATS_FILE, 'utf8');
+        const savedStats = JSON.parse(statsData);
+        
+        // Merge saved stats with defaults (preserves new fields)
+        usageStats = {
+            ...usageStats,
+            ...savedStats,
+            startTime: Date.now(), // Reset session start
+        };
+        
+        // Reset daily stats if new day
+        if (usageStats.lastReset !== new Date().toDateString()) {
+            usageStats.sessionsToday = 0;
+            usageStats.lastReset = new Date().toDateString();
+        }
+        
+        console.log('✅ Loaded persistent stats:', {
+            totalSessions: usageStats.sessionsTotal,
+            totalSpotifyAPICalls: usageStats.spotifyAPICalls,
+            totalSongsAnalyzed: usageStats.songsAnalyzed,
+            totalUptime: Math.round(usageStats.totalUptime / (1000 * 60 * 60)) + 'h',
+            firstLaunch: usageStats.firstLaunch
+        });
+        
+    } catch (error) {
+        console.log('📊 No existing stats file, starting fresh');
+        usageStats.firstLaunch = new Date().toISOString();
+        await saveUsageStats(); // Create initial stats file
+    }
+}
+
+// Save stats to persistent storage
+async function saveUsageStats() {
+    try {
+        // Update total uptime
+        const sessionUptime = Date.now() - usageStats.startTime;
+        const statsToSave = {
+            ...usageStats,
+            totalUptime: usageStats.totalUptime + sessionUptime,
+            renderHours: (usageStats.totalUptime + sessionUptime) / (1000 * 60 * 60),
+            lastSaved: new Date().toISOString(),
+            startTime: Date.now() // Reset for next interval
+        };
+        
+        await fs.writeFile(STATS_FILE, JSON.stringify(statsToSave, null, 2));
+        usageStats = statsToSave; // Update in-memory stats
+        console.log('💾 Usage stats saved to persistent storage');
+    } catch (error) {
+        console.error('❌ Failed to save usage stats:', error);
+    }
+}
+
+// Auto-save stats every 2 minutes
+setInterval(saveUsageStats, 2 * 60 * 1000);
+
+// Save stats on process exit
+process.on('SIGTERM', async () => {
+    console.log('💾 Saving final stats before shutdown...');
+    await saveUsageStats();
+    process.exit(0);
+});
+
+process.on('SIGINT', async () => {
+    console.log('💾 Saving final stats before shutdown...');
+    await saveUsageStats();
+    process.exit(0);
+});
+
+// Increment counter helper
+function incrementStat(statName, amount = 1) {
+    if (usageStats.hasOwnProperty(statName)) {
+        usageStats[statName] += amount;
+    }
+}
 
 console.log('🎵 DJ MEW v2.0 - Smart Queue Master Starting...');
 console.log('🔑 Spotify Client ID:', CLIENT_ID ? 'Configured ✅' : 'Missing ❌');
@@ -88,7 +180,7 @@ class SpotifyAPI {
         });
 
         // Track API usage
-        usageStats.spotifyAPICalls++;
+        incrementStat('spotifyAPICalls');
         
         if (!response.ok) {
             if (response.status === 401) {
@@ -140,7 +232,7 @@ class SpotifyAPI {
             
             // Cache the analysis
             djState.analysisCache.set(trackId, features);
-            usageStats.songsAnalyzed++;
+            incrementStat('songsAnalyzed');
             
             return features;
         } catch (error) {
@@ -713,7 +805,7 @@ class SmartQueue {
         if (queue.length <= 1) return queue;
 
         console.log('🧠 MEW is optimizing queue for perfect flow...');
-        usageStats.queueOptimizations++;
+        incrementStat('queueOptimizations');
 
         // Start with first track
         const optimized = [queue[0]];
@@ -765,7 +857,8 @@ const wss = new WebSocket.Server({ server });
 
 wss.on('connection', (ws) => {
     console.log('🎵 Client connected to DJ MEW');
-    usageStats.sessionsToday++;
+    incrementStat('sessionsToday');
+    incrementStat('sessionsTotal');
     
     // Send current state
     ws.send(JSON.stringify({
@@ -1010,13 +1103,37 @@ app.get('/api/state', (req, res) => {
     });
 });
 
-// Get usage statistics
+// Get usage statistics with real-time calculations
 app.get('/api/usage-stats', (req, res) => {
-    // Update render hours
-    const uptimeHours = (Date.now() - usageStats.startTime) / (1000 * 60 * 60);
-    usageStats.renderHours = uptimeHours;
+    // Calculate current session uptime
+    const sessionUptime = (Date.now() - usageStats.startTime) / (1000 * 60 * 60);
+    const totalUptime = (usageStats.totalUptime / (1000 * 60 * 60)) + sessionUptime;
     
-    res.json(usageStats);
+    // Enhanced stats response
+    const enhancedStats = {
+        ...usageStats,
+        renderHours: totalUptime,
+        sessionUptime: sessionUptime,
+        totalUptime: totalUptime,
+        avgSessionLength: usageStats.sessionsTotal > 0 ? totalUptime / usageStats.sessionsTotal : 0,
+        songsPerSession: usageStats.sessionsTotal > 0 ? usageStats.songsAnalyzed / usageStats.sessionsTotal : 0,
+        apiCallsPerHour: totalUptime > 0 ? usageStats.spotifyAPICalls / totalUptime : 0,
+        daysSinceFirstLaunch: usageStats.firstLaunch ? Math.floor((Date.now() - new Date(usageStats.firstLaunch).getTime()) / (1000 * 60 * 60 * 24)) : 0
+    };
+    
+    res.json(enhancedStats);
+});
+
+// Endpoint to track transitions (called from frontend)
+app.post('/api/track-transition', (req, res) => {
+    try {
+        incrementStat('transitionsPerformed');
+        console.log('🎛️ Transition performed - stats updated');
+        res.json({ success: true, transitions: usageStats.transitionsPerformed });
+    } catch (error) {
+        console.error('Error tracking transition:', error);
+        res.status(500).json({ error: error.message });
+    }
 });
 
 // Transfer playback to specific device
@@ -1182,6 +1299,9 @@ app.post('/api/mew-suggest-songs', async (req, res) => {
         
         console.log(`✨ MEW found ${suggestions.suggestions.length} songs for ${suggestions.vibe.mood} vibe`);
         
+        // Track MEW suggestion usage
+        incrementStat('mewSuggestions');
+        
         res.json({
             success: true,
             vibe: suggestions.vibe,
@@ -1229,6 +1349,7 @@ app.post('/api/mew-auto-add', async (req, res) => {
                 };
                 
                 djState.queue.push(queueItem);
+                incrementStat('autonomousSongsAdded');
                 console.log(`✨ MEW added: ${track.name} (${track.score || 75}% vibe match)`);
             } catch (error) {
                 console.error(`Failed to add ${track.name}:`, error);
@@ -1473,7 +1594,11 @@ class AutonomousDJ {
     }
 }
 
-console.log('🔮 DJ MEW v2.0 - Legendary AI DJ ready!');
-console.log('✨ Features: Smart search, beat matching, intelligent transitions, autonomous song discovery');
-console.log('🎯 Focus: Musical intelligence, creative decisions, perfect vibes');
-console.log('🤖 New: MEW can read vibes and find perfect songs autonomously!');
+// Load persistent stats on startup
+loadUsageStats().then(() => {
+    console.log('🔮 DJ MEW v2.0 - Legendary AI DJ ready!');
+    console.log('✨ Features: Smart search, beat matching, intelligent transitions, autonomous song discovery');
+    console.log('🎯 Focus: Musical intelligence, creative decisions, perfect vibes');
+    console.log('🤖 New: MEW can read vibes and find perfect songs autonomously!');
+    console.log('📊 Persistent usage tracking enabled');
+});
