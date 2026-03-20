@@ -30,6 +30,34 @@ let djState = {
     mixingMode: 'auto' // auto, manual
 };
 
+// Usage tracking
+let usageStats = {
+    claudeTokens: 0,
+    spotifyAPICalls: 0,
+    renderHours: 0,
+    sessionsToday: 0,
+    lastReset: new Date().toDateString(),
+    startTime: Date.now()
+};
+
+// Reset daily counters
+function resetDailyCounters() {
+    const today = new Date().toDateString();
+    if (usageStats.lastReset !== today) {
+        usageStats.claudeTokens = 0;
+        usageStats.spotifyAPICalls = 0;
+        usageStats.sessionsToday = 0;
+        usageStats.lastReset = today;
+        console.log('🔄 Daily usage counters reset');
+    }
+}
+
+// Calculate render hours (rough estimate based on uptime)
+function updateRenderHours() {
+    const uptimeHours = (Date.now() - usageStats.startTime) / (1000 * 60 * 60);
+    usageStats.renderHours = Math.min(uptimeHours, 750); // Cap at monthly limit
+}
+
 class SpotifyAPI {
     constructor() {
         this.baseUrl = 'https://api.spotify.com/v1';
@@ -83,6 +111,9 @@ class SpotifyAPI {
                 ...options.headers
             }
         });
+        
+        // Track Spotify API usage
+        usageStats.spotifyAPICalls++;
         
         if (!response.ok) {
             throw new Error(`Spotify API error: ${response.status} ${response.statusText}`);
@@ -310,6 +341,20 @@ app.get('/api/state', (req, res) => {
     res.json(djState);
 });
 
+// Get usage statistics
+app.get('/api/usage-stats', (req, res) => {
+    resetDailyCounters();
+    updateRenderHours();
+    
+    res.json({
+        claudeTokens: usageStats.claudeTokens,
+        spotifyAPICalls: usageStats.spotifyAPICalls,
+        renderHours: usageStats.renderHours,
+        sessionsToday: usageStats.sessionsToday,
+        uptime: Date.now() - usageStats.startTime
+    });
+});
+
 // Get current Spotify user info
 app.get('/api/spotify/me', async (req, res) => {
     try {
@@ -345,6 +390,11 @@ wss.on('connection', (ws) => {
     ws.on('message', async (message) => {
         try {
             const data = JSON.parse(message);
+            
+            // Track token usage for AI-related commands
+            if (['request-song', 'get-ai-suggestion', 'generate-smart-queue', 'ai-takeover'].includes(data.type)) {
+                trackWebSocketTokens(data.type);
+            }
             
             switch (data.type) {
                 case 'play':
@@ -407,6 +457,9 @@ function broadcast(message) {
 // AI Song Request Handler
 async function handleSongRequest(request) {
     console.log('Processing song request:', request);
+    
+    // Track Claude token usage for AI processing (estimated)
+    usageStats.claudeTokens += estimateTokenUsage(request);
     
     try {
         // Check if it's a natural language request vs specific song
@@ -584,9 +637,49 @@ async function selectTrackByMood(tracks, originalRequest) {
     return bestTrack.track;
 }
 
+// Estimate token usage for different operations
+function estimateTokenUsage(request) {
+    const requestLength = request.length;
+    
+    // Rough estimates based on request complexity
+    if (requestLength < 20) return 50; // Simple requests
+    if (requestLength < 100) return 150; // Medium requests
+    return 300; // Complex natural language requests
+}
+
+// Track WebSocket message token usage
+function trackWebSocketTokens(messageType) {
+    const tokenEstimates = {
+        'request-song': 200,
+        'get-ai-suggestion': 300,
+        'generate-smart-queue': 400,
+        'ai-takeover': 100,
+        'default': 50
+    };
+    
+    usageStats.claudeTokens += tokenEstimates[messageType] || tokenEstimates.default;
+}
+
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
     console.log(`🐾 DJ MEW Server running on port ${PORT}`);
     console.log(`🔗 Connect Spotify: http://localhost:${PORT}/login`);
     console.log(`✨ Legendary psychic mixing powers: ONLINE`);
+    
+    // Initialize usage tracking
+    resetDailyCounters();
+    
+    // Broadcast usage stats every 60 seconds
+    setInterval(() => {
+        updateRenderHours();
+        broadcast({
+            type: 'usage-update',
+            stats: {
+                claudeTokens: usageStats.claudeTokens,
+                spotifyAPICalls: usageStats.spotifyAPICalls,
+                renderHours: usageStats.renderHours,
+                sessionsToday: usageStats.sessionsToday
+            }
+        });
+    }, 60000);
 });

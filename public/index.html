@@ -30,6 +30,57 @@
             </div>
         </header>
 
+        <!-- Resource Monitoring Dashboard -->
+        <div class="resource-dashboard">
+            <div class="resource-panel">
+                <div class="resource-item">
+                    <div class="resource-icon">🧠</div>
+                    <div class="resource-info">
+                        <h4>Claude Tokens</h4>
+                        <p class="resource-value" id="claude-tokens">0 / ~10k</p>
+                        <div class="resource-bar">
+                            <div class="resource-progress" id="claude-progress"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="resource-item">
+                    <div class="resource-icon">⚡</div>
+                    <div class="resource-info">
+                        <h4>Render Hours</h4>
+                        <p class="resource-value" id="render-hours">0h / 750h</p>
+                        <div class="resource-bar">
+                            <div class="resource-progress" id="render-progress"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="resource-item">
+                    <div class="resource-icon">🎵</div>
+                    <div class="resource-info">
+                        <h4>Spotify API</h4>
+                        <p class="resource-value" id="spotify-api">0 / 10k</p>
+                        <div class="resource-bar">
+                            <div class="resource-progress" id="spotify-progress"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="resource-item">
+                    <div class="resource-icon">💰</div>
+                    <div class="resource-info">
+                        <h4>Est. Cost</h4>
+                        <p class="resource-value" id="estimated-cost">$0.00</p>
+                        <div class="resource-subtext">This month</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="resource-alerts" id="resource-alerts">
+                <!-- Alerts will appear here -->
+            </div>
+        </div>
+
         <div class="main-deck">
             <!-- Current Track Display -->
             <div class="now-playing">

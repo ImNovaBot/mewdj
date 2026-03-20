@@ -5,10 +5,17 @@ class AIdjPro {
         this.currentTrack = null;
         this.queue = [];
         this.isPlaying = false;
+        this.usageStats = {
+            claudeTokens: 0,
+            spotifyAPICalls: 0,
+            renderHours: 0,
+            sessionStart: Date.now()
+        };
         
         this.initWebSocket();
         this.initEventListeners();
         this.checkAuthStatus();
+        this.initResourceMonitoring();
     }
 
     initWebSocket() {
@@ -73,6 +80,11 @@ class AIdjPro {
             case 'spotify-disconnected':
                 this.updateSpotifyStatus(false);
                 this.showNotification('👋 Disconnected from Spotify');
+                break;
+                
+            case 'usage-update':
+                this.usageStats = { ...this.usageStats, ...data.stats };
+                this.updateResourceDashboard();
                 break;
                 
             case 'error':
@@ -352,12 +364,15 @@ class AIdjPro {
         
         this.sendCommand('request-song', { request });
         
+        // Track Claude token usage for AI song processing
+        const isNaturalLanguage = /^(play something|give me|i want|mood|feel like|vibe)/i.test(request.trim());
+        this.trackClaudeUsage(isNaturalLanguage ? 300 : 150);
+        
         if (!customRequest) {
             requestInput.value = '';
         }
         
         // Show different messages based on request type
-        const isNaturalLanguage = /^(play something|give me|i want|mood|feel like|vibe)/i.test(request.trim());
         const message = isNaturalLanguage ? 
             `🧠 Finding perfect match for: "${request}"` :
             `🎵 Adding to queue: "${request}"`;
@@ -448,11 +463,13 @@ class AIdjPro {
     }
 
     getAISuggestion() {
+        this.trackClaudeUsage(300); // Estimate for AI suggestion
         this.sendCommand('get-ai-suggestion');
         this.showNotification('🔮 MEW is using psychic powers...');
     }
 
     generateSmartQueue() {
+        this.trackClaudeUsage(400); // Estimate for smart queue generation
         this.sendCommand('generate-smart-queue');
         this.showNotification('✨ MEW is reading the crowd\'s energy...');
     }
@@ -552,6 +569,9 @@ class AIdjPro {
             const data = await response.json();
             currentSuggestions = data.tracks?.items || [];
             
+            // Track Spotify API usage
+            this.trackSpotifyAPI();
+            
             this.displaySuggestions(currentSuggestions);
         } catch (error) {
             console.error('Search error:', error);
@@ -627,6 +647,177 @@ class AIdjPro {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    initResourceMonitoring() {
+        // Update resource dashboard every 30 seconds
+        this.updateResourceDashboard();
+        setInterval(() => {
+            this.updateResourceDashboard();
+        }, 30000);
+
+        // Fetch initial usage stats
+        this.fetchUsageStats();
+    }
+
+    async fetchUsageStats() {
+        try {
+            const response = await fetch('/api/usage-stats');
+            if (response.ok) {
+                const stats = await response.json();
+                this.usageStats = { ...this.usageStats, ...stats };
+                this.updateResourceDashboard();
+            }
+        } catch (error) {
+            console.error('Failed to fetch usage stats:', error);
+        }
+    }
+
+    updateResourceDashboard() {
+        const sessionHours = (Date.now() - this.usageStats.sessionStart) / (1000 * 60 * 60);
+        const totalRenderHours = this.usageStats.renderHours + sessionHours;
+
+        // Update Claude tokens
+        this.updateResourceItem('claude-tokens', 'claude-progress', 
+            this.usageStats.claudeTokens, 10000, 
+            `${this.formatNumber(this.usageStats.claudeTokens)} / ~10k`);
+
+        // Update Render hours
+        this.updateResourceItem('render-hours', 'render-progress', 
+            totalRenderHours, 750, 
+            `${totalRenderHours.toFixed(1)}h / 750h`);
+
+        // Update Spotify API
+        this.updateResourceItem('spotify-api', 'spotify-progress', 
+            this.usageStats.spotifyAPICalls, 10000, 
+            `${this.formatNumber(this.usageStats.spotifyAPICalls)} / 10k`);
+
+        // Update estimated cost
+        const estimatedCost = this.calculateEstimatedCost();
+        document.getElementById('estimated-cost').textContent = `$${estimatedCost.toFixed(3)}`;
+
+        // Check for alerts
+        this.checkResourceAlerts();
+    }
+
+    updateResourceItem(valueId, progressId, current, max, displayText) {
+        const percentage = Math.min((current / max) * 100, 100);
+        const progressBar = document.getElementById(progressId);
+        const valueEl = document.getElementById(valueId);
+
+        // Update text
+        valueEl.textContent = displayText;
+
+        // Update progress bar
+        progressBar.style.width = `${percentage}%`;
+
+        // Update colors based on usage
+        progressBar.className = 'resource-progress';
+        if (percentage > 90) {
+            progressBar.classList.add('danger');
+        } else if (percentage > 75) {
+            progressBar.classList.add('warning');
+        }
+    }
+
+    calculateEstimatedCost() {
+        // Claude costs (rough estimates)
+        const claudeCost = (this.usageStats.claudeTokens / 1000) * 0.003; // ~$3 per 1M tokens
+
+        // Render is free up to 750 hours
+        const renderCost = 0;
+
+        // Spotify API is free up to 10k requests
+        const spotifyCost = 0;
+
+        return claudeCost + renderCost + spotifyCost;
+    }
+
+    checkResourceAlerts() {
+        const alertsContainer = document.getElementById('resource-alerts');
+        const alerts = [];
+
+        const sessionHours = (Date.now() - this.usageStats.sessionStart) / (1000 * 60 * 60);
+        const totalRenderHours = this.usageStats.renderHours + sessionHours;
+
+        // Claude token alerts
+        if (this.usageStats.claudeTokens > 9000) {
+            alerts.push({
+                type: 'danger',
+                icon: '⚠️',
+                message: 'Claude tokens approaching daily limit! Consider reducing AI features.'
+            });
+        } else if (this.usageStats.claudeTokens > 7500) {
+            alerts.push({
+                type: 'warning',
+                icon: '⚡',
+                message: 'Claude token usage is high. Monitor AI request frequency.'
+            });
+        }
+
+        // Render hours alerts
+        if (totalRenderHours > 675) {
+            alerts.push({
+                type: 'danger',
+                icon: '⏰',
+                message: 'Render hours approaching monthly limit! App may sleep more.'
+            });
+        } else if (totalRenderHours > 550) {
+            alerts.push({
+                type: 'warning',
+                icon: '📊',
+                message: 'Render hours usage is getting high for this month.'
+            });
+        }
+
+        // Spotify API alerts
+        if (this.usageStats.spotifyAPICalls > 9000) {
+            alerts.push({
+                type: 'danger',
+                icon: '🎵',
+                message: 'Spotify API calls approaching daily limit! Reduce search frequency.'
+            });
+        } else if (this.usageStats.spotifyAPICalls > 7500) {
+            alerts.push({
+                type: 'warning',
+                icon: '🔍',
+                message: 'Spotify API usage is high. Consider fewer search requests.'
+            });
+        }
+
+        // Success message when all is good
+        if (alerts.length === 0 && this.usageStats.claudeTokens > 0) {
+            alerts.push({
+                type: 'info',
+                icon: '✨',
+                message: 'All resources operating within limits. MEW is happy!'
+            });
+        }
+
+        // Update alerts display
+        alertsContainer.innerHTML = alerts.map(alert => 
+            `<div class="resource-alert ${alert.type}">
+                <span>${alert.icon}</span>
+                <span>${alert.message}</span>
+            </div>`
+        ).join('');
+    }
+
+    formatNumber(num) {
+        if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+        if (num >= 1000) return (num / 1000).toFixed(1) + 'k';
+        return num.toString();
+    }
+
+    // Track usage when making requests
+    trackClaudeUsage(tokens) {
+        this.usageStats.claudeTokens += tokens;
+        this.updateResourceDashboard();
+    }
+
+    trackSpotifyAPI() {
+        this.usageStats.spotifyAPICalls += 1;
+        this.updateResourceDashboard();
     }
 
     showManualAddDialog() {
