@@ -442,21 +442,31 @@ class DJMEWv2 {
     // Playback Controls - Now Actually Control Spotify!
     async play() {
         try {
-            if (this.player && this.deviceId) {
-                // If we have queue items, start playing them
-                if (this.state.queue.length > 0 && !this.state.currentTrack) {
-                    await this.playNextFromQueue();
-                } else {
-                    // Resume current playback
-                    await this.player.resume();
-                    console.log('▶️ Resumed playback');
-                    this.showNotification('▶️ Playing');
-                }
-            } else {
+            console.log('▶️ PLAY button clicked');
+            console.log('🔍 Player ready:', !!this.player);
+            console.log('🔍 Device ID:', this.deviceId);
+            console.log('🔍 Queue length:', this.state.queue.length);
+            console.log('🔍 Current track:', this.state.currentTrack ? this.state.currentTrack.name : 'none');
+
+            if (!this.player || !this.deviceId) {
                 this.showNotification('❌ Spotify player not ready', 'error');
+                return;
+            }
+
+            // ALWAYS play from MEW's queue if it has songs
+            if (this.state.queue.length > 0) {
+                console.log('🎵 Queue has songs - playing from MEW queue');
+                await this.playNextFromQueue();
+            } else if (this.state.currentTrack) {
+                // Resume current track if we have one
+                console.log('🎵 Resuming current track');
+                await this.player.resume();
+                this.showNotification('▶️ Resumed');
+            } else {
+                this.showNotification('❌ No songs in queue - add some music first!', 'error');
             }
         } catch (error) {
-            console.error('Play error:', error);
+            console.error('❌ Play error:', error);
             this.showNotification('Failed to play: ' + error.message, 'error');
         }
     }
@@ -485,6 +495,8 @@ class DJMEWv2 {
 
     // Play next song from MEW's queue
     async playNextFromQueue() {
+        console.log('🎵 playNextFromQueue called, queue length:', this.state.queue.length);
+        
         if (this.state.queue.length === 0) {
             this.showNotification('❌ Queue is empty - add some songs!');
             return;
@@ -492,7 +504,9 @@ class DJMEWv2 {
 
         try {
             const nextTrack = this.state.queue.shift(); // Remove first track
-            console.log('🎵 Playing next from queue:', nextTrack.name);
+            console.log('🎵 Playing next from MEW queue:', nextTrack.name, 'by', nextTrack.artist);
+            console.log('🎵 Track ID:', nextTrack.id);
+            console.log('🎵 Device ID:', this.deviceId);
 
             // Play the track via Spotify
             const response = await fetch('/api/play-track', {
@@ -506,11 +520,13 @@ class DJMEWv2 {
                 })
             });
 
+            console.log('🎵 Play track response:', response.status);
+
             if (response.ok) {
                 this.state.currentTrack = nextTrack;
                 this.renderQueue(); // Update queue display
                 this.updateNowPlaying();
-                this.showNotification(`🎵 Now Playing: ${nextTrack.name}`);
+                this.showNotification(`🎵 MEW Playing: ${nextTrack.name}`);
                 
                 // Broadcast state update
                 if (this.ws && this.ws.readyState === WebSocket.OPEN) {
@@ -522,6 +538,7 @@ class DJMEWv2 {
                 }
             } else {
                 const error = await response.json();
+                console.error('❌ Play track API error:', error);
                 throw new Error(error.error || 'Failed to play track');
             }
         } catch (error) {

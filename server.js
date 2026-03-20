@@ -523,21 +523,42 @@ app.post('/api/play-track', async (req, res) => {
     try {
         const { trackUri, deviceId } = req.body;
         
-        console.log('🎵 Playing track:', trackUri, 'on device:', deviceId);
+        console.log('🎵 Play track request received:');
+        console.log('  - Track URI:', trackUri);
+        console.log('  - Device ID:', deviceId);
+        console.log('  - Spotify token exists:', !!spotify.token);
+
+        if (!trackUri || !deviceId) {
+            return res.status(400).json({ error: 'Missing trackUri or deviceId' });
+        }
+
+        if (!spotify.token) {
+            return res.status(401).json({ error: 'No Spotify token available' });
+        }
         
-        await spotify.apiCall(`/me/player/play?device_id=${deviceId}`, {
+        // Play the specific track on the specific device
+        const playResponse = await spotify.apiCall(`/me/player/play?device_id=${deviceId}`, {
             method: 'PUT',
             body: JSON.stringify({
                 uris: [trackUri]
             })
         });
         
-        console.log('✅ Track started successfully');
-        res.json({ success: true });
+        console.log('✅ Track started successfully on MEW device');
+        res.json({ success: true, message: 'Track playing from MEW queue' });
         
     } catch (error) {
-        console.error('❌ Play track error:', error);
-        res.status(500).json({ error: error.message });
+        console.error('❌ Play track error:', {
+            message: error.message,
+            trackUri: req.body?.trackUri,
+            deviceId: req.body?.deviceId
+        });
+
+        if (error.message.includes('token')) {
+            res.status(401).json({ error: 'Spotify connection expired. Please reconnect.' });
+        } else {
+            res.status(500).json({ error: `Failed to play track: ${error.message}` });
+        }
     }
 });
 
